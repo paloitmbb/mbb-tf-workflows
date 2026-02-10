@@ -340,7 +340,7 @@ jobs:
     #   - name: Checkout reusable workflows
     #     uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
     #     with:
-    #       repository: paloitmbb/Terraform-reusable-workflows
+    #       repository: paloitmbb/mbb-tf-workflows
     #       path: .reusable-workflows
     #       ref: main
     #       token: ${{ secrets.GH_TOKEN || github.token }}
@@ -493,14 +493,3 @@ jobs:
           echo "=== Terraform Plan Output ==="
           terraform show -no-color tfplan > plan-output.txt
           cat plan-output.txt
-      
-      - name: Comment Plan on PR
-        if: github.event_name == 'pull_request' && steps.plan.outputs.exitcode != '0'
-        uses: paloitmbb/mbb-tf-actions/actions/pr-comment-plan@main
-        with:
-          working-directory: ${{ inputs.working-directory }}
-          environment: ${{ inputs.environment }}
-          terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
-          plan-hash: ${{ steps.metadata.outputs.plan-hash }}
-          plan-exitcode: ${{ steps.plan.outputs.exitcode }}
-          github-token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}

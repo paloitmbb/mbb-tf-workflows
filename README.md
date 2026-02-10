@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   terraform-ci:
-    uses: paloitmbb/Terraform-reusable-workflows/.github/workflows/terraform-ci.yml@main
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     with:
       terraform-version: '1.7.0'
       working-directory: './env/prod'
@@ -169,7 +169,7 @@ on: pull_request
 
 jobs:
   security:
-    uses: paloitmbb/Terraform-reusable-workflows/.github/workflows/terraform-security.yml@main
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-security.yml@main
     with:
       working-directory: './env/prod'
       environment: 'prod'
@@ -183,7 +183,7 @@ Stricter checks for production branches:
 ```yaml
 jobs:
   terraform-ci:
-    uses: paloitmbb/Terraform-reusable-workflows/.github/workflows/terraform-ci.yml@main
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     with:
       environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
       checkov-severity: ${{ github.ref == 'refs/heads/main' && 'HIGH' || 'MEDIUM' }}
@@ -195,7 +195,7 @@ jobs:
 ```yaml
 jobs:
   terraform-ci:
-    uses: paloitmbb/Terraform-reusable-workflows/.github/workflows/terraform-ci.yml@main
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     with:
       environment: 'dev'
       enable-trivy: false  # Disable Trivy
@@ -209,7 +209,7 @@ jobs:
 ### 1. Version Pinning
 ✅ **Recommended**: Pin to stable tag
 ```yaml
-uses: paloitmbb/Terraform-reusable-workflows/.github/workflows/terraform-ci.yml@v1.2.0
+uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@v1.2.0
 ```
 
 ❌ **Avoid in production**: Using `@main` (breaking changes possible)

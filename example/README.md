@@ -1,6 +1,6 @@
 # Terraform Workflow Examples
 
-Production-ready examples demonstrating how to use the **CDL-FirstOrg/Terraform-reusable-workflows** in your Terraform infrastructure projects.
+Demonstrating how to use the **paloitmbb/mbb-tf-workflows** in your Terraform infrastructure projects.
 
 ## 📚 Available Examples
 
@@ -56,12 +56,12 @@ cp pr-security-check-example.yml .github/workflows/pr-security-check.yml
 
 ```bash
 # Replace placeholder with your actual organization name
-sed -i 's|CDL-FirstOrg/Terraform-reusable-workflows|YOUR_ORG/YOUR_WORKFLOWS_REPO|g' .github/workflows/*.yml
+sed -i 's|paloitmbb/mbb-tf-workflows|YOUR_ORG/YOUR_WORKFLOWS_REPO|g' .github/workflows/*.yml
 ```
 
 **Example**: If your reusable workflows are in `acme-corp/github-workflows`:
 ```bash
-sed -i 's|CDL-FirstOrg/Terraform-reusable-workflows|acme-corp/github-workflows|g' .github/workflows/*.yml
+sed -i 's|paloitmbb/mbb-tf-workflows|acme-corp/github-workflows|g' .github/workflows/*.yml
 ```
 
 ---
@@ -171,7 +171,7 @@ All three security scanners (tfsec, Checkov, Trivy) support configurable severit
 
 **Example 1: Use HIGH threshold for all scanners**
 ```yaml
-uses: CDL-FirstOrg/Terraform-reusable-workflows/.github/workflows/terraform-pipeline.yml@main
+uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
 with:
   tfsec-severity: 'HIGH'
   checkov-severity: 'HIGH'
@@ -180,7 +180,7 @@ with:
 
 **Example 2: Different thresholds per scanner**
 ```yaml
-uses: CDL-FirstOrg/Terraform-reusable-workflows/.github/workflows/terraform-pipeline.yml@main
+uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
 with:
   tfsec-severity: 'CRITICAL'     # Only fail on critical tfsec issues
   checkov-severity: 'HIGH'       # Fail on high/critical Checkov issues
@@ -221,7 +221,7 @@ with:
 
 **Example Configuration**:
 ```yaml
-uses: CDL-FirstOrg/Terraform-reusable-workflows/.github/workflows/terraform-pipeline.yml@main
+uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
 with:
   terraform-var-file: 'terraform.tfvars'  # Relative to working-directory
   enable-tfsec: true
@@ -269,7 +269,7 @@ permissions:
 
 jobs:
   terraform-ci:
-    uses: CDL-FirstOrg/Terraform-reusable-workflows/.github/workflows/terraform-pipeline.yml@main
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     with:
       terraform-version: '1.7.0'
       working-directory: './env/dev'
@@ -320,7 +320,7 @@ jobs:
   
   terraform-ci:
     needs: prepare
-    uses: CDL-FirstOrg/Terraform-reusable-workflows/.github/workflows/terraform-pipeline.yml@main
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     with:
       working-directory: ./env/${{ needs.prepare.outputs.environment }}
       environment: ${{ needs.prepare.outputs.environment }}
@@ -355,7 +355,7 @@ permissions:
 
 jobs:
   security-scan:
-    uses: CDL-FirstOrg/Terraform-reusable-workflows/.github/workflows/reusable-tf-security.yml@main
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-security.yml@main
     with:
       working-directory: './env/dev'
       terraform-var-file: 'terraform.tfvars'
@@ -386,7 +386,7 @@ After workflow completion, these outputs are available for downstream jobs:
 ```yaml
 jobs:
   terraform-ci:
-    uses: CDL-FirstOrg/Terraform-reusable-workflows/.github/workflows/terraform-pipeline.yml@main
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     # ... configuration ...
   
   notify-changes:
@@ -446,7 +446,7 @@ with:
 **Solution**:
 ```bash
 # 1. Push reusable workflows FIRST
-cd Terraform-reusable-workflows
+cd mbb-tf-workflows
 git add .github/workflows/
 git commit -m "feat: add trivy-severity configurable threshold"
 git push origin main
@@ -509,7 +509,7 @@ az ad app federated-credential list \
 
 # 2. Verify subject matches your repository exactly
 # Subject format: repo:ORG/REPO:ref:refs/heads/BRANCH
-# Example: repo:CDL-FirstOrg/Terraform-caller1:ref:refs/heads/main
+# Example: repo:paloitmbb/terraform-caller:ref:refs/heads/main
 ```
 
 **Guide**: [Azure OIDC Step-by-Step Setup](https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure)
