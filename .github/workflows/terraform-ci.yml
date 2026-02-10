@@ -1,0 +1,506 @@
+name: Reusable Terraform CI
+
+# ============================================================================
+# Consolidated CI Workflow
+# 
+# This workflow replaces the orchestrator pattern with a single reusable
+# workflow containing all CI jobs: validate, security (parallel), and plan.
+#
+# Key improvements:
+# - Security scans run in parallel (3 separate jobs: tfsec, checkov, trivy)
+# - Time savings: ~3-5 minutes (sequential ~9-12 mins → parallel ~4-6 mins)
+# - Direct job execution (no orchestrator overhead)
+# - Conditional scanner enablement via inputs (enable-tfsec, enable-checkov, enable-trivy)
+# - Uses common-setup and security-aggregate composite actions
+# - Aggregate job collects results from all enabled scanners
+# ============================================================================
+
+on:
+  workflow_call:
+    inputs:
+      terraform-version:
+        description: 'Terraform version (e.g., 1.7.0, 1.6.6, latest)'
+        required: false
+        type: string
+        default: '1.7.0'
+      
+      working-directory:
+        description: 'Working directory containing Terraform code'
+        required: false
+        type: string
+        default: '.'
+      
+      environment:
+        description: 'Target environment (dev, staging, prod)'
+        required: true
+        type: string
+      
+      # Security Scanner Toggles
+      enable-tfsec:
+        description: 'Enable tfsec Terraform security scanning'
+        required: false
+        type: boolean
+        default: true
+      
+      enable-checkov:
+        description: 'Enable Checkov IaC security scanning'
+        required: false
+        type: boolean
+        default: true
+      
+      enable-trivy:
+        description: 'Enable Trivy security scanning'
+        required: false
+        type: boolean
+        default: true
+      
+      # Security Scanner Severity Thresholds
+      tfsec-severity:
+        description: 'Minimum tfsec severity to fail (LOW, MEDIUM, HIGH, CRITICAL)'
+        required: false
+        type: string
+        default: 'HIGH'
+      
+      checkov-severity:
+        description: 'Minimum Checkov severity to fail (CRITICAL, HIGH, MEDIUM, LOW)'
+        required: false
+        type: string
+        default: 'HIGH'
+      
+      trivy-severity:
+        description: 'Minimum Trivy severity to fail (CRITICAL, HIGH, MEDIUM, LOW)'
+        required: false
+        type: string
+        default: 'HIGH'
+      
+      # Linting
+      enable-tflint:
+        description: 'Enable tflint code quality linting'
+        required: false
+        type: boolean
+        default: true
+      
+      tflint-version:
+        description: 'tflint version to use'
+        required: false
+        type: string
+        default: 'v0.60.0'
+      
+      # Terraform
+      terraform-var-file:
+        description: 'Terraform variable file (e.g., dev.tfvars, prod.tfvars)'
+        required: false
+        type: string
+        default: ''
+      
+      # Execution
+      runner-os:
+        description: 'Runner OS for execution'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      
+      timeout-minutes:
+        description: 'Maximum execution time in minutes'
+        required: false
+        type: number
+        default: 60
+    
+    secrets:
+      AZURE_CLIENT_ID:
+        description: 'Azure App Registration Client ID for OIDC authentication'
+        required: false
+      AZURE_TENANT_ID:
+        description: 'Azure Tenant ID for OIDC authentication'
+        required: false
+      AZURE_SUBSCRIPTION_ID:
+        description: 'Azure Subscription ID for OIDC authentication'
+        required: false
+      GH_TOKEN:
+        description: 'GitHub token with read access to reusable workflows repo (use PAT for private repos)'
+        required: false
+    
+    outputs:
+      # Validate outputs
+      terraform-version:
+        description: 'Installed Terraform version'
+        value: ${{ jobs.validate.outputs.terraform-version }}
+      fmt-status:
+        description: 'Terraform format check status'
+        value: ${{ jobs.validate.outputs.fmt-status }}
+      validate-status:
+        description: 'Terraform validate status'
+        value: ${{ jobs.validate.outputs.validate-status }}
+      tflint-status:
+        description: 'tflint validation status'
+        value: ${{ jobs.validate.outputs.tflint-status }}
+      
+      # Security outputs
+      security-all-passed:
+        description: 'Whether all enabled security scans passed (true/false)'
+        value: ${{ jobs.aggregate-security.outputs.all-passed }}
+      tfsec-status:
+        description: 'tfsec scan status (success/failure/skipped)'
+        value: ${{ jobs.aggregate-security.outputs.tfsec-status }}
+      checkov-status:
+        description: 'Checkov scan status (success/failure/skipped)'
+        value: ${{ jobs.aggregate-security.outputs.checkov-status }}
+      trivy-status:
+        description: 'Trivy scan status (success/failure/skipped)'
+        value: ${{ jobs.aggregate-security.outputs.trivy-status }}
+      
+      # Plan outputs
+      plan-artifact-name:
+        description: 'Name of uploaded Terraform plan artifact'
+        value: ${{ jobs.plan.outputs.artifact-name }}
+      plan-exitcode:
+        description: 'Terraform plan exit code (0=no changes, 2=changes)'
+        value: ${{ jobs.plan.outputs.exitcode }}
+      plan-hash:
+        description: 'SHA256 hash of Terraform plan'
+        value: ${{ jobs.plan.outputs.plan-hash }}
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+  attestations: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+env:
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
+  TF_CLI_ARGS: '-no-color'
+
+jobs:
+  # ============================================================================
+  # Job 1: Terraform Validation
+  # ============================================================================
+  validate:
+    name: Validate Terraform (${{ inputs.environment }})
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 15
+    outputs:
+      terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
+      fmt-status: ${{ steps.validate.outputs.fmt-status }}
+      validate-status: ${{ steps.validate.outputs.validate-status }}
+      tflint-status: ${{ steps.validate.outputs.tflint-status }}
+    
+    steps:
+      - name: Common Setup
+        id: setup-tf
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+      
+      - name: Terraform Init (Backend Disabled)
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          enable-backend: 'false'
+      
+      - name: Terraform Validate
+        id: validate
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-validate@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          enable-tflint: ${{ inputs.enable-tflint }}
+          tflint-version: ${{ inputs.tflint-version }}
+      
+      - name: Validation Results Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## 🔍 Terraform Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Format (fmt) | ${{ steps.validate.outputs.fmt-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Syntax (validate) | ${{ steps.validate.outputs.validate-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality (tflint) | ${{ steps.validate.outputs.tflint-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # Job 2: tfsec Security Scan
+  # ============================================================================
+  tfsec-scan:
+    name: Security Scan - tfsec
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 10
+    continue-on-error: true
+    outputs:
+      outcome: ${{ steps.scan.outputs.outcome }}
+    
+    steps:
+      - name: Common Setup
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+      
+      - name: Terraform Init (Backend Disabled)
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          enable-backend: 'false'
+      
+      - name: tfsec Security Scan
+        id: scan
+        uses: paloitmbb/mbb-tf-actions/actions/scan-tfsec@main
+        with:
+          enabled: ${{ inputs.enable-tfsec }}
+          working-directory: ${{ inputs.working-directory }}
+          severity: ${{ inputs.tfsec-severity }}
+          environment: ${{ inputs.environment }}
+          var-file: ${{ inputs.terraform-var-file }}
+
+  # ============================================================================
+  # Job 3: Checkov Security Scan
+  # ============================================================================
+  checkov-scan:
+    name: Security Scan - checkov
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 10
+    continue-on-error: true
+    outputs:
+      outcome: ${{ steps.scan.outputs.outcome }}
+    
+    steps:
+      - name: Common Setup
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+      
+      - name: Terraform Init (Backend Disabled)
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          enable-backend: 'false'
+      
+      - name: Checkov Security Scan
+        id: scan
+        uses: paloitmbb/mbb-tf-actions/actions/scan-checkov@main
+        with:
+          enabled: ${{ inputs.enable-checkov }}
+          working-directory: ${{ inputs.working-directory }}
+          severity: ${{ inputs.checkov-severity }}
+          environment: ${{ inputs.environment }}
+          var-file: ${{ inputs.terraform-var-file }}
+
+  # ============================================================================
+  # Job 4: Trivy Security Scan
+  # ============================================================================
+  trivy-scan:
+    name: Security Scan - trivy
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 10
+    continue-on-error: true
+    outputs:
+      outcome: ${{ steps.scan.outputs.outcome }}
+    
+    steps:
+      - name: Common Setup
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+      
+      - name: Terraform Init (Backend Disabled)
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          enable-backend: 'false'
+      
+      - name: Trivy Security Scan
+        id: scan
+        uses: paloitmbb/mbb-tf-actions/actions/scan-trivy@main
+        with:
+          enabled: ${{ inputs.enable-trivy }}
+          working-directory: ${{ inputs.working-directory }}
+          severity: ${{ inputs.trivy-severity }}
+          environment: ${{ inputs.environment }}
+
+  # ============================================================================
+  # Job 5: Aggregate Security Results
+  # ============================================================================
+  aggregate-security:
+    name: Aggregate Security Results
+    needs: [tfsec-scan, checkov-scan, trivy-scan]
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 5
+    continue-on-error: true
+    if: always()
+    outputs:
+      all-passed: ${{ steps.aggregate.outputs.all-passed }}
+      tfsec-status: ${{ steps.aggregate.outputs.tfsec-status }}
+      checkov-status: ${{ steps.aggregate.outputs.checkov-status }}
+      trivy-status: ${{ steps.aggregate.outputs.trivy-status }}
+    
+    steps:
+    #   - name: Checkout reusable workflows
+    #     uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+    #     with:
+    #       repository: paloitmbb/Terraform-reusable-workflows
+    #       path: .reusable-workflows
+    #       ref: main
+    #       token: ${{ secrets.GH_TOKEN || github.token }}
+    #       persist-credentials: false
+      
+      - name: Aggregate Security Results
+        id: aggregate
+        uses: paloitmbb/mbb-tf-actions/actions/security-aggregate@main
+        with:
+          tfsec-enabled: ${{ inputs.enable-tfsec }}
+          tfsec-outcome: ${{ needs.tfsec-scan.outputs.outcome || 'skipped' }}
+          checkov-enabled: ${{ inputs.enable-checkov }}
+          checkov-outcome: ${{ needs.checkov-scan.outputs.outcome || 'skipped' }}
+          trivy-enabled: ${{ inputs.enable-trivy }}
+          trivy-outcome: ${{ needs.trivy-scan.outputs.outcome || 'skipped' }}
+      
+      - name: Security Results Summary
+        shell: bash
+        run: |
+          echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scanner | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| tfsec | ${{ steps.aggregate.outputs.tfsec-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Checkov | ${{ steps.aggregate.outputs.checkov-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy | ${{ steps.aggregate.outputs.trivy-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Overall Result:** ${{ steps.aggregate.outputs.all-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Fail if security scans failed
+        if: steps.aggregate.outputs.all-passed == 'false'
+        shell: bash
+        run: |
+          echo "::error::Security scans failed - see summary above"
+          exit 1
+
+  # ============================================================================
+  # Job 4: Terraform Plan
+  # ============================================================================
+  plan:
+    name: Generate Terraform Plan (${{ inputs.environment }})
+    needs: [validate, aggregate-security]
+    if: always() && needs.validate.result == 'success'
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    outputs:
+      artifact-name: ${{ steps.metadata.outputs.artifact-name }}
+      exitcode: ${{ steps.plan.outputs.exitcode }}
+      plan-hash: ${{ steps.metadata.outputs.plan-hash }}
+    
+    steps:
+      - name: Common Setup
+        id: setup-tf
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+      
+      - name: Azure OIDC Login
+        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Terraform Init (with Backend)
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          enable-backend: 'true'
+      
+      - name: Generate Terraform Plan
+        id: plan
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          echo "=== Generating Terraform Plan ==="
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Working Directory: ${{ inputs.working-directory }}"
+          
+          # Build terraform plan command
+          PLAN_CMD="terraform plan -detailed-exitcode -out=tfplan"
+          
+          if [ -n "${{ inputs.terraform-var-file }}" ]; then
+            PLAN_CMD="$PLAN_CMD -var-file=${{ inputs.terraform-var-file }}"
+            echo "Using var file: ${{ inputs.terraform-var-file }}"
+          fi
+          
+          echo "Command: $PLAN_CMD"
+          
+          # Run plan with detailed exit code and capture output
+          # 0 = no changes, 1 = error, 2 = changes present
+          set +e
+          PLAN_OUTPUT=$(eval "$PLAN_CMD" 2>&1)
+          EXITCODE=$?
+          set -e
+          
+          echo "$PLAN_OUTPUT"
+          
+          # Parse plan output to detect changes (workaround for exit code bug)
+          if echo "$PLAN_OUTPUT" | grep -q "Plan: [1-9][0-9]* to add\|Plan: [1-9][0-9]* to change\|Plan: [1-9][0-9]* to destroy"; then
+            EXITCODE=2
+            echo "DEBUG: Detected changes in plan output, overriding exitcode to 2"
+          elif echo "$PLAN_OUTPUT" | grep -q "No changes\|Plan: 0 to add, 0 to change, 0 to destroy"; then
+            EXITCODE=0
+            echo "DEBUG: No changes detected in plan output"
+          fi
+          
+          echo "DEBUG: Original exit code = $EXITCODE (from terraform command)"
+          echo "exitcode=$EXITCODE" >> $GITHUB_OUTPUT
+          echo "Plan exit code: $EXITCODE"
+          
+          if [ $EXITCODE -eq 1 ]; then
+            echo "❌ Terraform plan failed with errors"
+            exit 1
+          elif [ $EXITCODE -eq 2 ]; then
+            echo "📝 Terraform plan detected changes"
+          else
+            echo "✅ No infrastructure changes detected"
+          fi
+      
+      - name: Generate Plan Metadata
+        id: metadata
+        uses: paloitmbb/mbb-tf-actions/actions/tfplan-metadata@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          environment: ${{ inputs.environment }}
+          terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
+      
+      - name: Attest Plan Artifact
+        if: steps.plan.outputs.exitcode == '2'
+        uses: actions/attest-build-provenance@bdd51370e0416ac948727f861e03c2f05d32d78e # v1.3.2
+        with:
+          subject-path: ${{ inputs.working-directory }}/tfplan
+      
+      - name: Upload Plan Artifact
+        if: steps.plan.outputs.exitcode == '2'
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: ${{ steps.metadata.outputs.artifact-name }}
+          path: |
+            ${{ inputs.working-directory }}/tfplan
+            ${{ inputs.working-directory }}/plan-metadata.json
+          retention-days: 30
+          if-no-files-found: error
+      
+      - name: Generate Plan Output
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          echo "=== Terraform Plan Output ==="
+          terraform show -no-color tfplan > plan-output.txt
+          cat plan-output.txt
+      
+      - name: Comment Plan on PR
+        if: github.event_name == 'pull_request' && steps.plan.outputs.exitcode != '0'
+        uses: paloitmbb/mbb-tf-actions/actions/pr-comment-plan@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          environment: ${{ inputs.environment }}
+          terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
+          plan-hash: ${{ steps.metadata.outputs.plan-hash }}
+          plan-exitcode: ${{ steps.plan.outputs.exitcode }}
+          github-token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
