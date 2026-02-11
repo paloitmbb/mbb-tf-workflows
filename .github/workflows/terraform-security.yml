@@ -185,6 +185,7 @@ permissions:
   contents: read
   security-events: write
   actions: read
+  id-token: write      # Required for Azure OIDC authentication in plan job
 
 env:
   TF_IN_AUTOMATION: 'true'

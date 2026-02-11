@@ -152,6 +152,8 @@ permissions:
 ### 🔒 OIDC Authentication (Both Workflows)
 Zero static credentials - Azure AD trusts GitHub's identity provider via Workload Identity Federation with short-lived tokens (1-hour expiration). Both workflows use Azure OIDC for plan generation with backend access.
 
+**Setup Guide**: See [docs/AZURE-OIDC-QUICKSTART.md](docs/AZURE-OIDC-QUICKSTART.md) for complete Azure AD App Registration setup with step-by-step commands.
+
 **Benefits**:
 - No service principal secrets to rotate or leak
 - Automatic credential lifecycle management
@@ -322,6 +324,28 @@ permissions:
 working-directory: './env/prod'
 terraform-var-file: 'terraform.tfvars'  # Must exist in ./env/prod/terraform.tfvars
 ```
+
+---
+
+## Documentation
+
+### Setup Guides
+- **[Azure OIDC Setup](docs/AZURE-OIDC-QUICKSTART.md)** - Complete guide for Azure AD App Registration with OIDC authentication
+  - Step-by-step commands with variables
+  - Federated credentials configuration
+  - Storage account setup for Terraform state
+  - RBAC role assignments
+  - Troubleshooting common issues
+
+### Usage Examples
+- **[Example Workflows](example/README.md)** - Consumer repository workflow examples
+  - CI workflow setup
+  - PR security validation
+  - Environment-specific configurations
+
+### Related Documentation
+- **[Composite Actions Reference](https://github.com/paloitmbb/mbb-tf-actions/blob/main/docs/REFERENCE.md)** - Detailed action specifications
+- **[Caller Repository Setup](https://github.com/paloitmbb/mbb-tf-caller1/blob/main/docs/GITHUB-ACTIONS-SETUP.md)** - Full CI/CD pipeline setup
 
 ---
 
