@@ -73,6 +73,31 @@ on:
         type: string
         default: 'HIGH'
       
+      # Continue-on-error Control
+      tfsec-continue-on-error:
+        description: 'Continue workflow if tfsec scan fails (recommended: true for visibility)'
+        required: false
+        type: boolean
+        default: true
+      
+      checkov-continue-on-error:
+        description: 'Continue workflow if Checkov scan fails (recommended: true for visibility)'
+        required: false
+        type: boolean
+        default: true
+      
+      trivy-continue-on-error:
+        description: 'Continue workflow if Trivy scan fails (recommended: true for visibility)'
+        required: false
+        type: boolean
+        default: true
+      
+      aggregate-continue-on-error:
+        description: 'Continue workflow if security aggregation fails'
+        required: false
+        type: boolean
+        default: true
+      
       # Linting
       enable-tflint:
         description: 'Enable tflint code quality linting'
@@ -229,7 +254,7 @@ jobs:
     name: Security Scan - tfsec
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
-    continue-on-error: true
+    continue-on-error: ${{ inputs.tfsec-continue-on-error }}
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
     
@@ -262,7 +287,7 @@ jobs:
     name: Security Scan - checkov
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
-    continue-on-error: true
+    continue-on-error: ${{ inputs.checkov-continue-on-error }}
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
     
@@ -295,7 +320,7 @@ jobs:
     name: Security Scan - trivy
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
-    continue-on-error: true
+    continue-on-error: ${{ inputs.trivy-continue-on-error }}
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
     
@@ -328,7 +353,7 @@ jobs:
     needs: [tfsec-scan, checkov-scan, trivy-scan]
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 5
-    continue-on-error: true
+    continue-on-error: ${{ inputs.aggregate-continue-on-error }}
     if: always()
     outputs:
       all-passed: ${{ steps.aggregate.outputs.all-passed }}
@@ -387,9 +412,9 @@ jobs:
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     outputs:
-      artifact-name: ${{ steps.metadata.outputs.artifact-name }}
+      artifact-name: ${{ steps.plan.outputs.artifact-name }}
       exitcode: ${{ steps.plan.outputs.exitcode }}
-      plan-hash: ${{ steps.metadata.outputs.plan-hash }}
+      plan-hash: ${{ steps.plan.outputs.plan-hash }}
     
     steps:
       - name: Common Setup
@@ -413,83 +438,14 @@ jobs:
       
       - name: Generate Terraform Plan
         id: plan
-        shell: bash
-        working-directory: ${{ inputs.working-directory }}
-        run: |
-          echo "=== Generating Terraform Plan ==="
-          echo "Environment: ${{ inputs.environment }}"
-          echo "Working Directory: ${{ inputs.working-directory }}"
-          
-          # Build terraform plan command
-          PLAN_CMD="terraform plan -detailed-exitcode -out=tfplan"
-          
-          if [ -n "${{ inputs.terraform-var-file }}" ]; then
-            PLAN_CMD="$PLAN_CMD -var-file=${{ inputs.terraform-var-file }}"
-            echo "Using var file: ${{ inputs.terraform-var-file }}"
-          fi
-          
-          echo "Command: $PLAN_CMD"
-          
-          # Run plan with detailed exit code and capture output
-          # 0 = no changes, 1 = error, 2 = changes present
-          set +e
-          PLAN_OUTPUT=$(eval "$PLAN_CMD" 2>&1)
-          EXITCODE=$?
-          set -e
-          
-          echo "$PLAN_OUTPUT"
-          
-          # Parse plan output to detect changes (workaround for exit code bug)
-          if echo "$PLAN_OUTPUT" | grep -q "Plan: [1-9][0-9]* to add\|Plan: [1-9][0-9]* to change\|Plan: [1-9][0-9]* to destroy"; then
-            EXITCODE=2
-            echo "DEBUG: Detected changes in plan output, overriding exitcode to 2"
-          elif echo "$PLAN_OUTPUT" | grep -q "No changes\|Plan: 0 to add, 0 to change, 0 to destroy"; then
-            EXITCODE=0
-            echo "DEBUG: No changes detected in plan output"
-          fi
-          
-          echo "DEBUG: Original exit code = $EXITCODE (from terraform command)"
-          echo "exitcode=$EXITCODE" >> $GITHUB_OUTPUT
-          echo "Plan exit code: $EXITCODE"
-          
-          if [ $EXITCODE -eq 1 ]; then
-            echo "❌ Terraform plan failed with errors"
-            exit 1
-          elif [ $EXITCODE -eq 2 ]; then
-            echo "📝 Terraform plan detected changes"
-          else
-            echo "✅ No infrastructure changes detected"
-          fi
-      
-      - name: Generate Plan Metadata
-        id: metadata
-        uses: paloitmbb/mbb-tf-actions/actions/tfplan-metadata@main
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-plan@main
         with:
           working-directory: ${{ inputs.working-directory }}
           environment: ${{ inputs.environment }}
           terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
-      
-      - name: Attest Plan Artifact
-        if: steps.plan.outputs.exitcode == '2'
-        uses: actions/attest-build-provenance@bdd51370e0416ac948727f861e03c2f05d32d78e # v1.3.2
-        with:
-          subject-path: ${{ inputs.working-directory }}/tfplan
-      
-      - name: Upload Plan Artifact
-        if: steps.plan.outputs.exitcode == '2'
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
-        with:
-          name: ${{ steps.metadata.outputs.artifact-name }}
-          path: |
-            ${{ inputs.working-directory }}/tfplan
-            ${{ inputs.working-directory }}/plan-metadata.json
-          retention-days: 30
-          if-no-files-found: error
-      
-      - name: Generate Plan Output
-        shell: bash
-        working-directory: ${{ inputs.working-directory }}
-        run: |
-          echo "=== Terraform Plan Output ==="
-          terraform show -no-color tfplan > plan-output.txt
-          cat plan-output.txt
+          var-file: ${{ inputs.terraform-var-file }}
+          upload-artifacts: 'true'
+          generate-attestation: 'true'
+          generate-metadata: 'true'
+          show-summary: 'true'
+          artifact-retention-days: '30'

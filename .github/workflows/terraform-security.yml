@@ -4,11 +4,12 @@ name: Reusable Terraform Security Scans
 # Terraform Validation + Security Workflow
 # 
 # This workflow validates Terraform code and runs security scans in parallel.
-# Designed for PR security checks without requiring Azure credentials.
+# Includes plan preview generation for PR reviews (requires Azure credentials).
 #
 # Key features:
 # - Terraform validation (fmt, validate, tflint)
 # - Security scans run in parallel (matrix: tfsec, checkov, trivy)
+# - Plan preview with Azure OIDC authentication for PR feedback
 # - Time savings: ~3-5 minutes (parallel vs sequential)
 # - Conditional scanner enablement via inputs
 # - Uses common-setup and security-aggregate composite actions
@@ -72,6 +73,37 @@ on:
         type: string
         default: 'HIGH'
       
+      # Continue-on-error Control
+      tfsec-continue-on-error:
+        description: 'Continue workflow if tfsec scan fails (recommended: true for visibility)'
+        required: false
+        type: boolean
+        default: true
+      
+      checkov-continue-on-error:
+        description: 'Continue workflow if Checkov scan fails (recommended: true for visibility)'
+        required: false
+        type: boolean
+        default: true
+      
+      trivy-continue-on-error:
+        description: 'Continue workflow if Trivy scan fails (recommended: true for visibility)'
+        required: false
+        type: boolean
+        default: true
+      
+      aggregate-continue-on-error:
+        description: 'Continue workflow if security aggregation fails'
+        required: false
+        type: boolean
+        default: true
+      
+      plan-continue-on-error:
+        description: 'Continue workflow if plan generation fails'
+        required: false
+        type: boolean
+        default: true
+      
       # Linting
       enable-tflint:
         description: 'Enable tflint code quality linting'
@@ -103,6 +135,17 @@ on:
       GH_TOKEN:
         description: 'GitHub token with read access to reusable workflows repo (use PAT for private repos)'
         required: false
+      
+      # Azure OIDC Authentication (required for plan generation)
+      AZURE_CLIENT_ID:
+        description: 'Azure Application (Client) ID for OIDC authentication'
+        required: true
+      AZURE_TENANT_ID:
+        description: 'Azure Directory (Tenant) ID for OIDC authentication'
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        description: 'Azure Subscription ID for OIDC authentication'
+        required: true
     
     outputs:
       # Validate outputs
@@ -126,6 +169,17 @@ on:
       trivy-status:
         description: 'Trivy scan status (success/failure/skipped)'
         value: ${{ jobs.aggregate-security.outputs.trivy-status }}
+      
+      # Plan outputs
+      plan-exitcode:
+        description: 'Terraform plan exit code (0=no changes, 2=changes)'
+        value: ${{ jobs.plan.outputs.exitcode }}
+      plan-has-changes:
+        description: 'Whether plan detected changes (true/false)'
+        value: ${{ jobs.plan.outputs.has-changes }}
+      plan-summary:
+        description: 'Summary of plan changes'
+        value: ${{ jobs.plan.outputs.plan-summary }}
 
 permissions:
   contents: read
@@ -177,6 +231,7 @@ jobs:
     name: Security Scan - tfsec
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
+    continue-on-error: ${{ inputs.tfsec-continue-on-error }}
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
     
@@ -209,6 +264,7 @@ jobs:
     name: Security Scan - checkov
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
+    continue-on-error: ${{ inputs.checkov-continue-on-error }}
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
     
@@ -241,6 +297,7 @@ jobs:
     name: Security Scan - trivy
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
+    continue-on-error: ${{ inputs.trivy-continue-on-error }}
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
     
@@ -273,6 +330,7 @@ jobs:
     needs: [tfsec-scan, checkov-scan, trivy-scan]
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 5
+    continue-on-error: ${{ inputs.aggregate-continue-on-error }}
     if: always()
     outputs:
       all-passed: ${{ steps.aggregate.outputs.all-passed }}
@@ -313,4 +371,55 @@ jobs:
           echo "| Trivy | ${{ steps.aggregate.outputs.trivy-status }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Overall Result:** ${{ steps.aggregate.outputs.all-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # Job 6: Terraform Plan Preview (with Azure OIDC)
+  # ============================================================================
+  plan:
+    name: Generate Plan Preview (${{ inputs.environment }})
+    needs: [validate]
+    if: always() && needs.validate.result == 'success'
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 15
+    continue-on-error: ${{ inputs.plan-continue-on-error }}
+    permissions:
+      id-token: write      # Required for Azure OIDC authentication
+      contents: read
+    outputs:
+      exitcode: ${{ steps.plan.outputs.exitcode }}
+      has-changes: ${{ steps.plan.outputs.has-changes }}
+      plan-summary: ${{ steps.plan.outputs.plan-summary }}
+    
+    steps:
+      - name: Common Setup
+        id: setup-tf
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+      
+      - name: Azure OIDC Login
+        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Terraform Init (Backend Enabled)
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          enable-backend: 'true'
+      
+      - name: Generate Terraform Plan Preview
+        id: plan
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-plan@main
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          environment: ${{ inputs.environment }}
+          terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
+          var-file: ${{ inputs.terraform-var-file }}
+          upload-artifacts: 'false'
+          generate-attestation: 'false'
+          generate-metadata: 'false'
+          show-summary: 'true'
 

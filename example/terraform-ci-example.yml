@@ -1,0 +1,140 @@
+# Example: Complete Terraform CI Pipeline
+# 
+# This workflow demonstrates the full CI pipeline using terraform-ci.yml
+# for comprehensive validation, security scanning, and plan generation.
+#
+# Use this for: Post-merge validation, comprehensive testing
+# Estimated time: ~4-6 minutes (with parallel security scans)
+
+name: Terraform CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'env/**'
+      - 'modules/**'
+      - '**.tf'
+      - '**.tfvars'
+  
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+        default: dev
+      terraform-version:
+        description: 'Terraform version'
+        type: string
+        default: '1.7.0'
+
+# Required permissions for full CI workflow
+permissions:
+  contents: read          # Checkout code
+  security-events: write  # Upload SARIF to Security tab
+  id-token: write         # Azure OIDC authentication
+  pull-requests: write    # Comment on PRs
+  actions: read           # SARIF upload telemetry
+  attestations: write     # Sign plan artifacts
+
+jobs:
+  # ============================================================================
+  # Determine which environment to target based on branch or manual input
+  # ============================================================================
+  prepare:
+    name: Prepare Environment Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      working-directory: ${{ steps.set-env.outputs.working-directory }}
+    
+    steps:
+      - name: Determine Environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENV="prod"
+          elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
+            ENV="stage"
+          else
+            ENV="dev"
+          fi
+          
+          echo "environment=${ENV}" >> $GITHUB_OUTPUT
+          echo "working-directory=./env/${ENV}" >> $GITHUB_OUTPUT
+          echo "📍 Target Environment: **${ENV}**" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # Run complete Terraform CI pipeline
+  # ============================================================================
+  terraform-ci:
+    name: Terraform CI (${{ needs.prepare.outputs.environment }})
+    needs: prepare
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
+    with:
+      # Terraform Configuration
+      terraform-version: ${{ github.event.inputs.terraform-version || '1.7.0' }}
+      working-directory: ${{ needs.prepare.outputs.working-directory }}
+      environment: ${{ needs.prepare.outputs.environment }}
+      terraform-var-file: 'terraform.tfvars'
+      
+      # Code Quality
+      enable-tflint: true
+      tflint-version: 'v0.60.0'
+      
+      # Security Scanners (all enabled by default)
+      enable-tfsec: true
+      enable-checkov: true
+      enable-trivy: true
+      
+      # Security Severity Thresholds (HIGH by default)
+      tfsec-severity: 'HIGH'
+      checkov-severity: 'HIGH'
+      trivy-severity: 'HIGH'
+      
+      # Continue-on-error Control
+      tfsec-continue-on-error: true        # Allow all scans to run
+      checkov-continue-on-error: true      # Comprehensive visibility
+      trivy-continue-on-error: true        # Full security posture
+      aggregate-continue-on-error: false   # Block on aggregate failure
+      
+      # Execution Configuration
+      runner-os: 'ubuntu-latest'
+      timeout-minutes: 60
+    
+    secrets:
+      # Azure OIDC Authentication (required for plan generation)
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      # Optional: GitHub token for private module access
+      # GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+  # ============================================================================
+  # Optional: Post-CI notification or downstream job
+  # ============================================================================
+  notify:
+    name: Notify on Changes
+    needs: [prepare, terraform-ci]
+    runs-on: ubuntu-latest
+    if: always() && needs.terraform-ci.outputs.plan-exitcode == '2'
+    
+    steps:
+      - name: Notify Team
+        run: |
+          echo "## 🚀 Infrastructure Changes Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.prepare.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Plan Artifact:** ${{ needs.terraform-ci.outputs.plan-artifact-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Plan Hash:** ${{ needs.terraform-ci.outputs.plan-hash }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Review the plan artifact before applying changes." >> $GITHUB_STEP_SUMMARY

@@ -6,9 +6,9 @@ Demonstrating how to use the **paloitmbb/mbb-tf-workflows** in your Terraform in
 
 | Example File | Purpose | When to Use |
 |--------------|---------|-------------|
-| **[terraform-ci-example.yml](terraform-ci-example.yml)** | Complete CI pipeline (validate + security + plan) | Post-merge validation, manual testing, comprehensive checks |
-| **[pr-security-check-example.yml](pr-security-check-example.yml)** | Lightweight PR security scanning | Pull request validation before code review |
-| **[ENVIRONMENT-STRUCTURE-GUIDE.md](ENVIRONMENT-STRUCTURE-GUIDE.md)** | Environment organization patterns | Planning directory structure |
+| **[terraform-ci-example.yml](terraform-ci-example.yml)** | Complete CI pipeline (validate + security + plan) | Post-merge validation, comprehensive checks with plan artifacts and attestation |
+| **[pr-security-check-example.yml](pr-security-check-example.yml)** | PR security scanning with plan preview | Pull request validation with security checks and infrastructure change preview |
+| **[ENVIRONMENT-STRUCTURE-GUIDE.md](ENVIRONMENT-STRUCTURE-GUIDE.md)** | Environment organization patterns | Planning directory structure and migration from existing projects |
 
 ---
 
@@ -25,17 +25,19 @@ cp terraform-ci-example.yml .github/workflows/terraform-ci.yml
 ```
 
 **Features**:
-- ✅ Validates Terraform syntax and formatting
-- ✅ Runs security scans (tfsec, Checkov, Trivy)
-- ✅ Generates Terraform plan
-- ✅ Uploads SARIF to GitHub Security tab
-- ✅ Creates plan attestation
+- ✅ Validates Terraform syntax, formatting, and code quality
+- ✅ Runs parallel security scans (tfsec, Checkov, Trivy)
+- ✅ Generates Terraform plan with Azure OIDC authentication
+- ✅ Uploads SARIF results to GitHub Security tab
+- ✅ Creates signed plan attestation (SLSA compliance)
+- ✅ Uploads plan artifacts for later apply
+- ✅ Posts PR comments with plan summary (if on PR)
 - ✅ Environment-aware (auto-detects dev/stage/prod)
 
 ---
 
-#### Option B: PR Security Check (Recommended for Pull Requests)
-**Use when**: You want fast security feedback on PRs before code review
+#### Option B: PR Security + Plan Check (Recommended for Pull Requests)
+**Use when**: You want security validation and plan preview on PRs before code review
 
 **Copy**:
 ```bash
@@ -43,12 +45,17 @@ cp pr-security-check-example.yml .github/workflows/pr-security-check.yml
 ```
 
 **Features**:
-- ✅ Lightweight (security scans only, no plan)
-- ✅ Fast feedback (3-5 minutes)
+- ✅ Security scans (tfsec, Checkov, Trivy) with SARIF upload
+- ✅ Plan preview with Azure OIDC authentication
+- ✅ Shows actual infrastructure changes in job summary
+- ✅ Moderate feedback time (6-8 minutes with parallel scans)
 - ✅ Blocks PR merge if security issues found
-- ✅ SARIF upload to Security tab
-- ✅ PR comments with scan results
 - ✅ Environment-aware based on target branch
+- ❌ No plan artifacts uploaded (lighter workflow)
+- ❌ No attestation signing
+- ❌ No PR comments
+
+**Required**: Azure OIDC secrets (AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID)
 
 ---
 
@@ -77,7 +84,7 @@ AZURE_TENANT_ID: xyz-789-abc-123
 AZURE_SUBSCRIPTION_ID: sub-456-def-789
 ```
 
-**How to get these values**: See [Azure OIDC Setup Guide](https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure)
+**How to get these values**: See [Azure OIDC Setup Guide](../../../mbb-tf-caller1/docs/GITHUB-ACTIONS-SETUP.md) or the [Microsoft documentation](https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure)
 
 #### Optional Secrets
 ```
@@ -207,17 +214,13 @@ with:
 
 ### terraform-var-file Integration
 
-**Why**: Security scanners analyze Terraform configurations STATICALLY (without runtime values). This causes false negatives when:
-- Resource configurations depend on `var.xxx` values
-- Conditional resources use variables (`count = var.enabled ? 1 : 0`)
-- Dynamic blocks reference variables
+**Why**: Security scanners analyze Terraform configurations **statically** (without runtime values). Passing `terraform.tfvars` enables scanners to evaluate configurations with actual variable values, significantly improving scan coverage and accuracy.
 
-**Solution**: Pass `terraform.tfvars` to security scanners so they can evaluate configurations with actual values.
-
-**Impact**: Increases scan coverage from ~70% to ~95% by enabling scanners to analyze:
-- Conditionally created resources
+**Impact**: Increases scan coverage from **~70% to ~95%** by enabling scanners to analyze:
+- Conditionally created resources (`count = var.enabled ? 1 : 0`)
 - Dynamically configured security groups
 - Variable-driven compliance rules
+- Resource configurations depending on `var.xxx` values
 
 **Example Configuration**:
 ```yaml
@@ -248,6 +251,65 @@ enable_https = true
 # Now scanner evaluates with actual value:
 # ✅ enable_https_traffic_only = true (scanned properly)
 ```
+
+---
+
+### Failure Handling Control
+
+**Why**: Control whether individual security scan failures stop the workflow or allow all scans to complete for comprehensive visibility.
+
+**Default Behavior**: All security scans run with `continue-on-error: true` to ensure complete security posture visibility across all scanners. The `aggregate-security` job then determines overall pass/fail.
+
+**Use Cases**:
+
+**Example 1: Comprehensive Reporting (Recommended)**
+```yaml
+uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
+with:
+  # Allow all scans to run for full visibility
+  tfsec-continue-on-error: true
+  checkov-continue-on-error: true
+  trivy-continue-on-error: true
+  # But fail workflow if any enabled scanner fails
+  aggregate-continue-on-error: false
+```
+
+**Example 2: Strict Enforcement (Fail Fast)**
+```yaml
+uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
+with:
+  # Stop immediately on first security failure
+  tfsec-continue-on-error: false
+  checkov-continue-on-error: false
+  trivy-continue-on-error: false
+  aggregate-continue-on-error: false
+```
+
+**Example 3: Reporting Mode (PR Validation)**
+```yaml
+uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-security.yml@main
+with:
+  # Allow all scans to complete for reporting
+  tfsec-continue-on-error: true
+  checkov-continue-on-error: true
+  trivy-continue-on-error: true
+  aggregate-continue-on-error: true  # Don't fail workflow
+  # Custom security-gate job handles PR blocking logic
+```
+
+**Example 4: Scanner-Specific Control**
+```yaml
+uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
+with:
+  # Strict on tfsec (Terraform-specific issues)
+  tfsec-continue-on-error: false
+  # Lenient on Checkov and Trivy (policy can be noisy)
+  checkov-continue-on-error: true
+  trivy-continue-on-error: true
+  aggregate-continue-on-error: false
+```
+
+**Best Practice**: For **CI workflows** (post-merge), set `aggregate-continue-on-error: false` to fail the workflow on security issues. For **PR workflows**, set `aggregate-continue-on-error: true` and use a custom `security-gate` job for more flexible blocking logic.
 
 ---
 
