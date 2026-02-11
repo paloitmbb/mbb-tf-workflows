@@ -387,11 +387,11 @@ jobs:
         run: |
           echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Scanner | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| tfsec | ${{ steps.aggregate.outputs.tfsec-status }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Checkov | ${{ steps.aggregate.outputs.checkov-status }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trivy | ${{ steps.aggregate.outputs.trivy-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Scanner | Status | Severity Threshold |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|-------------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| tfsec | ${{ steps.aggregate.outputs.tfsec-status }} | ${{ inputs.tfsec-severity }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Checkov | ${{ steps.aggregate.outputs.checkov-status }} | ${{ inputs.checkov-severity }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy | ${{ steps.aggregate.outputs.trivy-status }} | ${{ inputs.trivy-severity }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Overall Result:** ${{ steps.aggregate.outputs.all-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}" >> $GITHUB_STEP_SUMMARY
       

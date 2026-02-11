@@ -340,15 +340,6 @@ jobs:
       trivy-status: ${{ steps.aggregate.outputs.trivy-status }}
     
     steps:
-      # - name: Checkout reusable workflows
-      #   uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      #   with:
-      #     repository: paloitmbb/mbb-tf-workflows
-      #     path: .reusable-workflows
-      #     ref: main
-      #     token: ${{ secrets.GH_TOKEN || github.token }}
-      #     persist-credentials: false
-      
       - name: Aggregate Security Results
         id: aggregate
         uses: paloitmbb/mbb-tf-actions/actions/security-aggregate@main
@@ -365,11 +356,11 @@ jobs:
         run: |
           echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Scanner | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| tfsec | ${{ steps.aggregate.outputs.tfsec-status }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Checkov | ${{ steps.aggregate.outputs.checkov-status }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trivy | ${{ steps.aggregate.outputs.trivy-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Scanner | Status | Severity Threshold |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|-------------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| tfsec | ${{ steps.aggregate.outputs.tfsec-status }} | ${{ inputs.tfsec-severity }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Checkov | ${{ steps.aggregate.outputs.checkov-status }} | ${{ inputs.checkov-severity }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy | ${{ steps.aggregate.outputs.trivy-status }} | ${{ inputs.trivy-severity }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Overall Result:** ${{ steps.aggregate.outputs.all-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}" >> $GITHUB_STEP_SUMMARY
 
