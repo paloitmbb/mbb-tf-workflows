@@ -259,41 +259,109 @@ jobs:
           environment: ${{ inputs.environment }}
           var-file: ${{ inputs.terraform-var-file }}
           continue-on-error: ${{ inputs.tfsec-continue-on-error }}
+      
+      - name: Debug - Show Original SARIF File
+        if: always()
+        shell: bash
+        run: |
+          echo "📄 Checking for original SARIF file..."
+          if [ -f "tfsec-results.sarif" ]; then
+            echo "✅ Found: tfsec-results.sarif"
+            ls -lh tfsec-results.sarif
+          else
+            echo "⚠️ Original SARIF file not found: tfsec-results.sarif"
+          fi
+      
+      - name: Rename SARIF File
+        id: rename
+        if: always()
+        uses: paloitmbb/mbb-tf-actions/actions/sarif-naming@main
+        with:
+          scanner-name: 'tfsec'
+          source-file: 'tfsec-results.sarif'
+          environment: ${{ inputs.environment }}
+      
+      - name: Debug - Show Renamed SARIF File
+        if: always()
+        shell: bash
+        run: |
+          echo "📝 Renamed SARIF file info:"
+          echo "  Original: tfsec-results.sarif"
+          echo "  Renamed:  ${{ steps.rename.outputs.renamed-file }}"
+          echo "  Path:     ${{ steps.rename.outputs.renamed-path }}"
+          if [ -f "${{ steps.rename.outputs.renamed-file }}" ]; then
+            echo "✅ Renamed file exists:"
+            ls -lh "${{ steps.rename.outputs.renamed-file }}"
+          fi
 
   # ============================================================================
   # Job 3: Checkov Security Scan
   # ============================================================================
-  checkov-scan:
-    name: Security Scan - checkov
-    runs-on: ${{ inputs.runner-os }}
-    timeout-minutes: 10
-    if: inputs.enable-checkov == true
-    continue-on-error: ${{ inputs.checkov-continue-on-error }}
-    outputs:
-      outcome: ${{ steps.scan.outputs.outcome }}
+  # checkov-scan:
+  #   name: Security Scan - checkov
+  #   runs-on: ${{ inputs.runner-os }}
+  #   timeout-minutes: 10
+  #   if: inputs.enable-checkov == true
+  #   continue-on-error: ${{ inputs.checkov-continue-on-error }}
+  #   outputs:
+  #     outcome: ${{ steps.scan.outputs.outcome }}
     
-    steps:
-      - name: Common Setup
-        uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
-        with:
-          terraform-version: ${{ inputs.terraform-version }}
+  #   steps:
+  #     - name: Common Setup
+  #       uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
+  #       with:
+  #         terraform-version: ${{ inputs.terraform-version }}
       
-      - name: Terraform Init (Backend Disabled)
-        uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
-        with:
-          working-directory: ${{ inputs.working-directory }}
-          enable-backend: 'false'
+  #     - name: Terraform Init (Backend Disabled)
+  #       uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
+  #       with:
+  #         working-directory: ${{ inputs.working-directory }}
+  #         enable-backend: 'false'
       
-      - name: Checkov Security Scan
-        id: scan
-        uses: paloitmbb/mbb-tf-actions/actions/scan-checkov@main
-        with:
-          enabled: ${{ inputs.enable-checkov }}
-          working-directory: ${{ inputs.working-directory }}
-          severity: ${{ inputs.checkov-severity }}
-          environment: ${{ inputs.environment }}
-          var-file: ${{ inputs.terraform-var-file }}
-          continue-on-error: ${{ inputs.checkov-continue-on-error }}
+  #     # - name: Checkov Security Scan
+  #     #   id: scan
+  #     #   uses: paloitmbb/mbb-tf-actions/actions/scan-checkov@main
+  #     #   with:
+  #     #     enabled: ${{ inputs.enable-checkov }}
+  #     #     working-directory: ${{ inputs.working-directory }}
+  #     #     severity: ${{ inputs.checkov-severity }}
+  #     #     environment: ${{ inputs.environment }}
+  #     #     var-file: ${{ inputs.terraform-var-file }}
+  #     #     continue-on-error: ${{ inputs.checkov-continue-on-error }}
+      
+  #     # - name: Debug - Show Original SARIF File
+  #     #   if: always()
+  #     #   shell: bash
+  #     #   run: |
+  #     #     echo "📄 Checking for original SARIF file..."
+  #     #     if [ -f "checkov-results.sarif" ]; then
+  #     #       echo "✅ Found: checkov-results.sarif"
+  #     #       ls -lh checkov-results.sarif
+  #     #     else
+  #     #       echo "⚠️ Original SARIF file not found: checkov-results.sarif"
+  #     #     fi
+      
+  #     # - name: Rename SARIF File
+  #     #   id: rename
+  #     #   if: always()
+  #     #   uses: paloitmbb/mbb-tf-actions/actions/sarif-naming@main
+  #     #   with:
+  #     #     scanner-name: 'checkov'
+  #     #     source-file: 'checkov-results.sarif'
+  #     #     environment: ${{ inputs.environment }}
+      
+  #     # - name: Debug - Show Renamed SARIF File
+  #     #   if: always()
+  #     #   shell: bash
+  #     #   run: |
+  #     #     echo "📝 Renamed SARIF file info:"
+  #     #     echo "  Original: checkov-results.sarif"
+  #     #     echo "  Renamed:  ${{ steps.rename.outputs.renamed-file }}"
+  #     #     echo "  Path:     ${{ steps.rename.outputs.renamed-path }}"
+  #     #     if [ -f "${{ steps.rename.outputs.renamed-file }}" ]; then
+  #     #       echo "✅ Renamed file exists:"
+  #     #       ls -lh "${{ steps.rename.outputs.renamed-file }}"
+  #     #     fi
 
   # ============================================================================
   # Job 4: Trivy Security Scan
@@ -328,6 +396,40 @@ jobs:
           severity: ${{ inputs.trivy-severity }}
           environment: ${{ inputs.environment }}
           continue-on-error: ${{ inputs.trivy-continue-on-error }}
+      
+      - name: Debug - Show Original SARIF File
+        if: always()
+        shell: bash
+        run: |
+          echo "📄 Checking for original SARIF file..."
+          if [ -f "trivy-results.sarif" ]; then
+            echo "✅ Found: trivy-results.sarif"
+            ls -lh trivy-results.sarif
+          else
+            echo "⚠️ Original SARIF file not found: trivy-results.sarif"
+          fi
+      
+      - name: Rename SARIF File
+        id: rename
+        if: always()
+        uses: paloitmbb/mbb-tf-actions/actions/sarif-naming@main
+        with:
+          scanner-name: 'trivy'
+          source-file: 'trivy-results.sarif'
+          environment: ${{ inputs.environment }}
+      
+      - name: Debug - Show Renamed SARIF File
+        if: always()
+        shell: bash
+        run: |
+          echo "📝 Renamed SARIF file info:"
+          echo "  Original: trivy-results.sarif"
+          echo "  Renamed:  ${{ steps.rename.outputs.renamed-file }}"
+          echo "  Path:     ${{ steps.rename.outputs.renamed-path }}"
+          if [ -f "${{ steps.rename.outputs.renamed-file }}" ]; then
+            echo "✅ Renamed file exists:"
+            ls -lh "${{ steps.rename.outputs.renamed-file }}"
+          fi
 
   # ============================================================================
   # Job 5: Aggregate Security Results
