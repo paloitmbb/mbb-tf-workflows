@@ -326,18 +326,6 @@ jobs:
           var-file: ${{ inputs.terraform-var-file }}
           continue-on-error: ${{ inputs.tfsec-continue-on-error }}
       
-      - name: Debug - Show Original SARIF File
-        if: always()
-        shell: bash
-        run: |
-          echo "📄 Checking for original SARIF file..."
-          if [ -f "tfsec-results.sarif" ]; then
-            echo "✅ Found: tfsec-results.sarif"
-            ls -lh tfsec-results.sarif
-          else
-            echo "⚠️ Original SARIF file not found: tfsec-results.sarif"
-          fi
-      
       - name: Rename SARIF File
         id: rename
         if: always()
@@ -346,19 +334,6 @@ jobs:
           scanner-name: 'tfsec'
           source-file: 'tfsec-results.sarif'
           environment: ${{ inputs.environment }}
-      
-      - name: Debug - Show Renamed SARIF File
-        if: always()
-        shell: bash
-        run: |
-          echo "📝 Renamed SARIF file info:"
-          echo "  Original: tfsec-results.sarif"
-          echo "  Renamed:  ${{ steps.rename.outputs.renamed-file }}"
-          echo "  Path:     ${{ steps.rename.outputs.renamed-path }}"
-          if [ -f "${{ steps.rename.outputs.renamed-file }}" ]; then
-            echo "✅ Renamed file exists:"
-            ls -lh "${{ steps.rename.outputs.renamed-file }}"
-          fi
       
       - name: Azure OIDC Login
         if: always() && inputs.sarif-storage-account-name != ''
@@ -486,18 +461,6 @@ jobs:
           environment: ${{ inputs.environment }}
           continue-on-error: ${{ inputs.trivy-continue-on-error }}
       
-      - name: Debug - Show Original SARIF File
-        if: always()
-        shell: bash
-        run: |
-          echo "📄 Checking for original SARIF file..."
-          if [ -f "trivy-results.sarif" ]; then
-            echo "✅ Found: trivy-results.sarif"
-            ls -lh trivy-results.sarif
-          else
-            echo "⚠️ Original SARIF file not found: trivy-results.sarif"
-          fi
-      
       - name: Rename SARIF File
         id: rename
         if: always()
@@ -506,19 +469,6 @@ jobs:
           scanner-name: 'trivy'
           source-file: 'trivy-results.sarif'
           environment: ${{ inputs.environment }}
-      
-      - name: Debug - Show Renamed SARIF File
-        if: always()
-        shell: bash
-        run: |
-          echo "📝 Renamed SARIF file info:"
-          echo "  Original: trivy-results.sarif"
-          echo "  Renamed:  ${{ steps.rename.outputs.renamed-file }}"
-          echo "  Path:     ${{ steps.rename.outputs.renamed-path }}"
-          if [ -f "${{ steps.rename.outputs.renamed-file }}" ]; then
-            echo "✅ Renamed file exists:"
-            ls -lh "${{ steps.rename.outputs.renamed-file }}"
-          fi
       
       - name: Azure OIDC Login
         if: always() && inputs.sarif-storage-account-name != ''
