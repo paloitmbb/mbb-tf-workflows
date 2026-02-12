@@ -118,15 +118,39 @@ on:
         type: string
         default: ''
       
+      # Artifacts
+      artifact-retention-days:
+        description: 'Number of days to retain plan artifacts (1-90, uses repository default if not specified)'
+        required: false
+        type: number
+      
       # Execution
       runner-os:
-        description: 'Runner OS for execution'
+        description: 'Default runner OS for all jobs (can be overridden per job)'
         required: false
         type: string
         default: 'ubuntu-latest'
       
+      validate-runner-os:
+        description: 'Runner OS for validation job (defaults to runner-os)'
+        required: false
+        type: string
+        default: ''
+      
+      security-runner-os:
+        description: 'Runner OS for security scan jobs (defaults to runner-os)'
+        required: false
+        type: string
+        default: ''
+      
+      plan-runner-os:
+        description: 'Runner OS for plan job (defaults to runner-os)'
+        required: false
+        type: string
+        default: ''
+      
       timeout-minutes:
-        description: 'Maximum execution time in minutes'
+        description: 'Maximum execution time in minutes for plan job'
         required: false
         type: number
         default: 60
@@ -134,16 +158,13 @@ on:
     secrets:
       AZURE_CLIENT_ID:
         description: 'Azure App Registration Client ID for OIDC authentication'
-        required: false
+        required: true
       AZURE_TENANT_ID:
         description: 'Azure Tenant ID for OIDC authentication'
-        required: false
+        required: true
       AZURE_SUBSCRIPTION_ID:
         description: 'Azure Subscription ID for OIDC authentication'
-        required: false
-      GH_TOKEN:
-        description: 'GitHub token with read access to reusable workflows repo (use PAT for private repos)'
-        required: false
+        required: true
     
     outputs:
       # Validate outputs
@@ -205,7 +226,7 @@ jobs:
   # ============================================================================
   validate:
     name: Validate Terraform (${{ inputs.environment }})
-    runs-on: ${{ inputs.runner-os }}
+    runs-on: ${{ inputs.validate-runner-os || inputs.runner-os }}
     timeout-minutes: 15
     outputs:
       terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
@@ -252,7 +273,7 @@ jobs:
   # ============================================================================
   tfsec-scan:
     name: Security Scan - tfsec
-    runs-on: ${{ inputs.runner-os }}
+    runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
     timeout-minutes: 10
     if: inputs.enable-tfsec == true
     continue-on-error: ${{ inputs.tfsec-continue-on-error }}
@@ -280,13 +301,14 @@ jobs:
           severity: ${{ inputs.tfsec-severity }}
           environment: ${{ inputs.environment }}
           var-file: ${{ inputs.terraform-var-file }}
+          continue-on-error: ${{ inputs.tfsec-continue-on-error }}
 
   # ============================================================================
   # Job 3: Checkov Security Scan
   # ============================================================================
   checkov-scan:
     name: Security Scan - checkov
-    runs-on: ${{ inputs.runner-os }}
+    runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
     timeout-minutes: 10
     if: inputs.enable-checkov == true
     continue-on-error: ${{ inputs.checkov-continue-on-error }}
@@ -314,13 +336,14 @@ jobs:
           severity: ${{ inputs.checkov-severity }}
           environment: ${{ inputs.environment }}
           var-file: ${{ inputs.terraform-var-file }}
+          continue-on-error: ${{ inputs.checkov-continue-on-error }}
 
   # ============================================================================
   # Job 4: Trivy Security Scan
   # ============================================================================
   trivy-scan:
     name: Security Scan - trivy
-    runs-on: ${{ inputs.runner-os }}
+    runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
     timeout-minutes: 10
     if: inputs.enable-trivy == true
     continue-on-error: ${{ inputs.trivy-continue-on-error }}
@@ -347,6 +370,7 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           severity: ${{ inputs.trivy-severity }}
           environment: ${{ inputs.environment }}
+          continue-on-error: ${{ inputs.trivy-continue-on-error }}
 
   # ============================================================================
   # Job 5: Aggregate Security Results
@@ -354,7 +378,7 @@ jobs:
   aggregate-security:
     name: Aggregate Security Results
     needs: [tfsec-scan, checkov-scan, trivy-scan]
-    runs-on: ${{ inputs.runner-os }}
+    runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
     timeout-minutes: 5
     continue-on-error: ${{ inputs.aggregate-continue-on-error }}
     if: always()
@@ -365,15 +389,6 @@ jobs:
       trivy-status: ${{ steps.aggregate.outputs.trivy-status }}
     
     steps:
-    #   - name: Checkout reusable workflows
-    #     uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-    #     with:
-    #       repository: paloitmbb/mbb-tf-workflows
-    #       path: .reusable-workflows
-    #       ref: main
-    #       token: ${{ secrets.GH_TOKEN || github.token }}
-    #       persist-credentials: false
-      
       - name: Aggregate Security Results
         id: aggregate
         uses: paloitmbb/mbb-tf-actions/actions/security-aggregate@main
@@ -412,7 +427,7 @@ jobs:
     name: Generate Terraform Plan (${{ inputs.environment }})
     needs: [validate, aggregate-security]
     if: always() && needs.validate.result == 'success'
-    runs-on: ${{ inputs.runner-os }}
+    runs-on: ${{ inputs.plan-runner-os || inputs.runner-os }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     outputs:
       artifact-name: ${{ steps.plan.outputs.artifact-name }}
@@ -451,4 +466,4 @@ jobs:
           generate-attestation: 'true'
           generate-metadata: 'true'
           show-summary: 'true'
-          artifact-retention-days: '30'
+          artifact-retention-days: ${{ inputs.artifact-retention-days }}

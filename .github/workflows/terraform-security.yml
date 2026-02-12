@@ -258,6 +258,7 @@ jobs:
           severity: ${{ inputs.tfsec-severity }}
           environment: ${{ inputs.environment }}
           var-file: ${{ inputs.terraform-var-file }}
+          continue-on-error: ${{ inputs.tfsec-continue-on-error }}
 
   # ============================================================================
   # Job 3: Checkov Security Scan
@@ -292,6 +293,7 @@ jobs:
           severity: ${{ inputs.checkov-severity }}
           environment: ${{ inputs.environment }}
           var-file: ${{ inputs.terraform-var-file }}
+          continue-on-error: ${{ inputs.checkov-continue-on-error }}
 
   # ============================================================================
   # Job 4: Trivy Security Scan
@@ -325,6 +327,7 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           severity: ${{ inputs.trivy-severity }}
           environment: ${{ inputs.environment }}
+          continue-on-error: ${{ inputs.trivy-continue-on-error }}
 
   # ============================================================================
   # Job 5: Aggregate Security Results
