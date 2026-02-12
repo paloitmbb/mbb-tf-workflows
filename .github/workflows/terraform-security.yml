@@ -130,6 +130,25 @@ on:
         required: false
         type: string
         default: 'ubuntu-latest'
+      
+      # Azure Storage for SARIF Upload
+      sarif-storage-account-name:
+        description: 'Azure Storage Account name for SARIF uploads (leave empty to skip upload)'
+        required: false
+        type: string
+        default: ''
+      
+      sarif-storage-container-name:
+        description: 'Azure Storage Container name for SARIF uploads'
+        required: false
+        type: string
+        default: 'security-scans'
+      
+      sarif-storage-destination-path:
+        description: 'Destination path prefix in blob storage (e.g., sarif-results/)'
+        required: false
+        type: string
+        default: 'sarif-results/'
     
     secrets:
       GH_TOKEN:
@@ -152,6 +171,12 @@ on:
       terraform-version:
         description: 'Installed Terraform version'
         value: ${{ jobs.validate.outputs.terraform-version }}
+      fmt-status:
+        description: 'terraform fmt validation status'
+        value: ${{ jobs.validate.outputs.fmt-status }}
+      validate-status:
+        description: 'terraform validate status'
+        value: ${{ jobs.validate.outputs.validate-status }}
       tflint-status:
         description: 'tflint validation status'
         value: ${{ jobs.validate.outputs.tflint-status }}
@@ -202,6 +227,8 @@ jobs:
     timeout-minutes: 15
     outputs:
       terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
+      fmt-status: ${{ steps.validate.outputs.fmt-status }}
+      validate-status: ${{ steps.validate.outputs.validate-status }}
       tflint-status: ${{ steps.validate.outputs.tflint-status }}
     
     steps:
@@ -234,6 +261,10 @@ jobs:
     timeout-minutes: 10
     if: inputs.enable-tfsec == true
     continue-on-error: ${{ inputs.tfsec-continue-on-error }}
+    permissions:
+      id-token: write      # Required for Azure OIDC authentication
+      contents: read
+      security-events: write
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
     
@@ -293,6 +324,25 @@ jobs:
             echo "✅ Renamed file exists:"
             ls -lh "${{ steps.rename.outputs.renamed-file }}"
           fi
+      
+      - name: Azure OIDC Login
+        if: always() && inputs.sarif-storage-account-name != ''
+        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Upload SARIF to Azure Storage
+        if: always() && inputs.sarif-storage-account-name != ''
+        uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
+        with:
+          storage-account-name: ${{ inputs.sarif-storage-account-name }}
+          container-name: ${{ inputs.sarif-storage-container-name }}
+          source-path: ${{ steps.rename.outputs.renamed-file }}
+          destination-path: ${{ inputs.sarif-storage-destination-path }}
+          content-type: 'application/sarif+json'
+          overwrite: 'true'
 
   # ============================================================================
   # Job 3: Checkov Security Scan
@@ -372,6 +422,10 @@ jobs:
     timeout-minutes: 10
     if: inputs.enable-trivy == true
     continue-on-error: ${{ inputs.trivy-continue-on-error }}
+    permissions:
+      id-token: write      # Required for Azure OIDC authentication
+      contents: read
+      security-events: write
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
     
@@ -430,6 +484,25 @@ jobs:
             echo "✅ Renamed file exists:"
             ls -lh "${{ steps.rename.outputs.renamed-file }}"
           fi
+      
+      - name: Azure OIDC Login
+        if: always() && inputs.sarif-storage-account-name != ''
+        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Upload SARIF to Azure Storage
+        if: always() && inputs.sarif-storage-account-name != ''
+        uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
+        with:
+          storage-account-name: ${{ inputs.sarif-storage-account-name }}
+          container-name: ${{ inputs.sarif-storage-container-name }}
+          source-path: ${{ steps.rename.outputs.renamed-file }}
+          destination-path: ${{ inputs.sarif-storage-destination-path }}
+          content-type: 'application/sarif+json'
+          overwrite: 'true'
 
   # ============================================================================
   # Job 5: Aggregate Security Results
