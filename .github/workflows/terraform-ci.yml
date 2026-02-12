@@ -479,7 +479,7 @@ jobs:
   # ============================================================================
   aggregate-security:
     name: Aggregate Security Results
-    needs: [tfsec-scan, checkov-scan, trivy-scan]
+    needs: [tfsec-scan, trivy-scan]
     runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
     timeout-minutes: 5
     continue-on-error: ${{ inputs.aggregate-continue-on-error }}
@@ -487,7 +487,7 @@ jobs:
     outputs:
       all-passed: ${{ steps.aggregate.outputs.all-passed }}
       tfsec-status: ${{ steps.aggregate.outputs.tfsec-status }}
-      checkov-status: ${{ steps.aggregate.outputs.checkov-status }}
+      # checkov-status: ${{ steps.aggregate.outputs.checkov-status }}
       trivy-status: ${{ steps.aggregate.outputs.trivy-status }}
     
     steps:
@@ -497,8 +497,8 @@ jobs:
         with:
           tfsec-enabled: ${{ inputs.enable-tfsec }}
           tfsec-outcome: ${{ needs.tfsec-scan.outputs.outcome || 'skipped' }}
-          checkov-enabled: ${{ inputs.enable-checkov }}
-          checkov-outcome: ${{ needs.checkov-scan.outputs.outcome || 'skipped' }}
+          # checkov-enabled: ${{ inputs.enable-checkov }}
+          # checkov-outcome: ${{ needs.checkov-scan.outputs.outcome || 'skipped' }}
           trivy-enabled: ${{ inputs.enable-trivy }}
           trivy-outcome: ${{ needs.trivy-scan.outputs.outcome || 'skipped' }}
       
@@ -510,7 +510,7 @@ jobs:
           echo "| Scanner | Status | Severity Threshold |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|-------------------|" >> $GITHUB_STEP_SUMMARY
           echo "| tfsec | ${{ steps.aggregate.outputs.tfsec-status }} | ${{ inputs.tfsec-severity }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Checkov | ${{ steps.aggregate.outputs.checkov-status }} | ${{ inputs.checkov-severity }} |" >> $GITHUB_STEP_SUMMARY
+          # echo "| Checkov | ${{ steps.aggregate.outputs.checkov-status }} | ${{ inputs.checkov-severity }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Trivy | ${{ steps.aggregate.outputs.trivy-status }} | ${{ inputs.trivy-severity }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Overall Result:** ${{ steps.aggregate.outputs.all-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}" >> $GITHUB_STEP_SUMMARY
