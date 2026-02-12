@@ -84,7 +84,7 @@ AZURE_TENANT_ID: xyz-789-abc-123
 AZURE_SUBSCRIPTION_ID: sub-456-def-789
 ```
 
-**How to get these values**: See [Azure OIDC Setup Guide](../../../mbb-tf-caller1/docs/GITHUB-ACTIONS-SETUP.md) or the [Microsoft documentation](https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure)
+**How to get these values**: See [Azure OIDC Setup Guide](../docs/AZURE-OIDC-QUICKSTART.md) or the [Microsoft documentation](https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure)
 
 #### Optional Secrets
 ```

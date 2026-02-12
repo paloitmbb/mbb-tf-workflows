@@ -175,7 +175,7 @@ Zero static credentials - Azure AD trusts GitHub's identity provider via Workloa
 - `checkov-iac-scan`
 - `trivy-iac-scan`
 
-**Parallel Execution**: All security scanners run concurrently with `continue-on-error: true` to ensure complete coverage even if one scanner fails. The `security-aggregate` action determines the final pass/fail status.
+**Parallel Execution**: All enabled security scanners run concurrently with `continue-on-error: true` to ensure complete coverage even if one scanner fails. Jobs are conditionally executed based on their `enable-<scanner>` input flags, skipping disabled scanners entirely for improved efficiency. The `security-aggregate` action determines the final pass/fail status.
 
 ### ✅ Variable File Integration
 

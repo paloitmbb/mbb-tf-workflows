@@ -2,6 +2,19 @@
 
 Complete guide to configure Azure AD App Registration with OIDC (OpenID Connect) for GitHub Actions Terraform workflows. This eliminates the need for static credentials and provides secure, short-lived token-based authentication.
 
+## Table of Contents
+
+- [🎯 Overview](#-overview)
+- [📋 Prerequisites](#-prerequisites)
+- [🚀 Complete Setup Guide](#-complete-setup-guide)
+- [🔧 GitHub Repository Configuration](#-github-repository-configuration)
+- [✅ Verification & Testing](#-verification--testing)
+- [🐛 Troubleshooting](#-troubleshooting)
+- [📖 Reference](#-reference)
+- [🔗 Additional Resources](#-additional-resources)
+- [📝 Quick Reference Commands](#-quick-reference-commands)
+- [✅ Setup Checklist](#-setup-checklist)
+
 ## 🎯 Overview
 
 **What is OIDC?** OpenID Connect allows GitHub Actions to authenticate to Azure using short-lived tokens instead of storing long-lived credentials as secrets.

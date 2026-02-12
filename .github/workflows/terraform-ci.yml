@@ -254,6 +254,7 @@ jobs:
     name: Security Scan - tfsec
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
+    if: inputs.enable-tfsec == true
     continue-on-error: ${{ inputs.tfsec-continue-on-error }}
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
@@ -287,6 +288,7 @@ jobs:
     name: Security Scan - checkov
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
+    if: inputs.enable-checkov == true
     continue-on-error: ${{ inputs.checkov-continue-on-error }}
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
@@ -320,6 +322,7 @@ jobs:
     name: Security Scan - trivy
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 10
+    if: inputs.enable-trivy == true
     continue-on-error: ${{ inputs.trivy-continue-on-error }}
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
