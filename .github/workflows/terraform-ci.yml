@@ -293,7 +293,7 @@ jobs:
   tfsec-scan:
     name: Security Scan - tfsec
     runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     if: inputs.enable-tfsec == true
     continue-on-error: ${{ inputs.tfsec-continue-on-error }}
     permissions:
@@ -429,7 +429,7 @@ jobs:
   trivy-scan:
     name: Security Scan - trivy
     runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     if: inputs.enable-trivy == true
     continue-on-error: ${{ inputs.trivy-continue-on-error }}
     permissions:
