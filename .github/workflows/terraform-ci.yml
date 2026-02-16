@@ -7,10 +7,10 @@ name: Reusable Terraform CI
 # workflow containing all CI jobs: validate, security (parallel), and plan.
 #
 # Key improvements:
-# - Security scans run in parallel (3 separate jobs: tfsec, checkov, trivy)
+# - Security scans run in parallel (2 separate jobs: tfsec, trivy)
 # - Time savings: ~3-5 minutes (sequential ~9-12 mins → parallel ~4-6 mins)
 # - Direct job execution (no orchestrator overhead)
-# - Conditional scanner enablement via inputs (enable-tfsec, enable-checkov, enable-trivy)
+# - Conditional scanner enablement via inputs (enable-tfsec, enable-trivy)
 # - Uses common-setup and security-aggregate composite actions
 # - Aggregate job collects results from all enabled scanners
 # ============================================================================
@@ -42,12 +42,6 @@ on:
         type: boolean
         default: true
       
-      enable-checkov:
-        description: 'Enable Checkov IaC security scanning'
-        required: false
-        type: boolean
-        default: true
-      
       enable-trivy:
         description: 'Enable Trivy security scanning'
         required: false
@@ -61,12 +55,6 @@ on:
         type: string
         default: 'HIGH'
       
-      checkov-severity:
-        description: 'Minimum Checkov severity to fail (CRITICAL, HIGH, MEDIUM, LOW)'
-        required: false
-        type: string
-        default: 'HIGH'
-      
       trivy-severity:
         description: 'Minimum Trivy severity to fail (CRITICAL, HIGH, MEDIUM, LOW)'
         required: false
@@ -76,12 +64,6 @@ on:
       # Continue-on-error Control
       tfsec-continue-on-error:
         description: 'Continue workflow if tfsec scan fails (recommended: true for visibility)'
-        required: false
-        type: boolean
-        default: true
-      
-      checkov-continue-on-error:
-        description: 'Continue workflow if Checkov scan fails (recommended: true for visibility)'
         required: false
         type: boolean
         default: true
@@ -207,9 +189,6 @@ on:
       tfsec-status:
         description: 'tfsec scan status (success/failure/skipped)'
         value: ${{ jobs.aggregate-security.outputs.tfsec-status }}
-      checkov-status:
-        description: 'Checkov scan status (success/failure/skipped)'
-        value: ${{ jobs.aggregate-security.outputs.checkov-status }}
       trivy-status:
         description: 'Trivy scan status (success/failure/skipped)'
         value: ${{ jobs.aggregate-security.outputs.trivy-status }}
@@ -355,76 +334,7 @@ jobs:
           overwrite: 'true'
 
   # ============================================================================
-  # Job 3: Checkov Security Scan
-  # ============================================================================
-  # checkov-scan:
-  #   name: Security Scan - checkov
-  #   runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
-  #   timeout-minutes: 10
-  #   if: inputs.enable-checkov == true
-  #   continue-on-error: ${{ inputs.checkov-continue-on-error }}
-  #   outputs:
-  #     outcome: ${{ steps.scan.outputs.outcome }}
-    
-  #   steps:
-  #     - name: Common Setup
-  #       uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
-  #       with:
-  #         terraform-version: ${{ inputs.terraform-version }}
-      
-  #     - name: Terraform Init (Backend Disabled)
-  #       uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
-  #       with:
-  #         working-directory: ${{ inputs.working-directory }}
-  #         enable-backend: 'false'
-      
-  #     - name: Checkov Security Scan
-  #       id: scan
-  #       uses: paloitmbb/mbb-tf-actions/actions/scan-checkov@main
-  #       with:
-  #         enabled: ${{ inputs.enable-checkov }}
-  #         working-directory: ${{ inputs.working-directory }}
-  #         severity: ${{ inputs.checkov-severity }}
-  #         environment: ${{ inputs.environment }}
-  #         var-file: ${{ inputs.terraform-var-file }}
-  #         continue-on-error: ${{ inputs.checkov-continue-on-error }}
-      
-  #     - name: Debug - Show Original SARIF File
-  #       if: always()
-  #       shell: bash
-  #       run: |
-  #         echo "📄 Checking for original SARIF file..."
-  #         if [ -f "checkov-results.sarif" ]; then
-  #           echo "✅ Found: checkov-results.sarif"
-  #           ls -lh checkov-results.sarif
-  #         else
-  #           echo "⚠️ Original SARIF file not found: checkov-results.sarif"
-  #         fi
-      
-  #     - name: Rename SARIF File
-  #       id: rename
-  #       if: always()
-  #       uses: paloitmbb/mbb-tf-actions/actions/sarif-naming@main
-  #       with:
-  #         scanner-name: 'checkov'
-  #         source-file: 'checkov-results.sarif'
-  #         environment: ${{ inputs.environment }}
-      
-  #     - name: Debug - Show Renamed SARIF File
-  #       if: always()
-  #       shell: bash
-  #       run: |
-  #         echo "📝 Renamed SARIF file info:"
-  #         echo "  Original: checkov-results.sarif"
-  #         echo "  Renamed:  ${{ steps.rename.outputs.renamed-file }}"
-  #         echo "  Path:     ${{ steps.rename.outputs.renamed-path }}"
-  #         if [ -f "${{ steps.rename.outputs.renamed-file }}" ]; then
-  #           echo "✅ Renamed file exists:"
-  #           ls -lh "${{ steps.rename.outputs.renamed-file }}"
-  #         fi
-
-  # ============================================================================
-  # Job 4: Trivy Security Scan
+  # Job 3: Trivy Security Scan
   # ============================================================================
   trivy-scan:
     name: Security Scan - trivy
@@ -490,7 +400,7 @@ jobs:
           overwrite: 'true'
 
   # ============================================================================
-  # Job 5: Aggregate Security Results
+  # Job 4: Aggregate Security Results
   # ============================================================================
   aggregate-security:
     name: Aggregate Security Results
@@ -502,7 +412,6 @@ jobs:
     outputs:
       all-passed: ${{ steps.aggregate.outputs.all-passed }}
       tfsec-status: ${{ steps.aggregate.outputs.tfsec-status }}
-      # checkov-status: ${{ steps.aggregate.outputs.checkov-status }}
       trivy-status: ${{ steps.aggregate.outputs.trivy-status }}
     
     steps:
@@ -512,8 +421,6 @@ jobs:
         with:
           tfsec-enabled: ${{ inputs.enable-tfsec }}
           tfsec-outcome: ${{ needs.tfsec-scan.outputs.outcome || 'skipped' }}
-          # checkov-enabled: ${{ inputs.enable-checkov }}
-          # checkov-outcome: ${{ needs.checkov-scan.outputs.outcome || 'skipped' }}
           trivy-enabled: ${{ inputs.enable-trivy }}
           trivy-outcome: ${{ needs.trivy-scan.outputs.outcome || 'skipped' }}
       
@@ -525,7 +432,6 @@ jobs:
           echo "| Scanner | Status | Severity Threshold |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|-------------------|" >> $GITHUB_STEP_SUMMARY
           echo "| tfsec | ${{ steps.aggregate.outputs.tfsec-status }} | ${{ inputs.tfsec-severity }} |" >> $GITHUB_STEP_SUMMARY
-          # echo "| Checkov | ${{ steps.aggregate.outputs.checkov-status }} | ${{ inputs.checkov-severity }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Trivy | ${{ steps.aggregate.outputs.trivy-status }} | ${{ inputs.trivy-severity }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Overall Result:** ${{ steps.aggregate.outputs.all-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}" >> $GITHUB_STEP_SUMMARY
@@ -538,7 +444,7 @@ jobs:
           exit 1
 
   # ============================================================================
-  # Job 4: Terraform Plan
+  # Job 5: Terraform Plan
   # ============================================================================
   plan:
     name: Generate Terraform Plan (${{ inputs.environment }})

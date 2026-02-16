@@ -269,7 +269,7 @@ jobs:
           environment: ${{ inputs.environment }}
           var-file: ${{ inputs.terraform-var-file }}
           continue-on-error: ${{ inputs.tfsec-continue-on-error }}
-      
+
       - name: Rename SARIF File
         id: rename
         if: always()
@@ -278,14 +278,6 @@ jobs:
           scanner-name: 'tfsec'
           source-file: 'tfsec-results.sarif'
           environment: ${{ inputs.environment }}
-      
-      - name: Upload SARIF to GitHub Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@396bb3e45325a47dd769a2e68cad5aaf65f08867 # v3.27.5
-        with:
-          sarif_file: ${{ steps.rename.outputs.renamed-file }}
-          category: tfsec-${{ inputs.environment }}
-
   # ============================================================================
   # Job 3: Trivy Security Scan
   # ============================================================================
@@ -322,7 +314,7 @@ jobs:
           severity: ${{ inputs.trivy-severity }}
           environment: ${{ inputs.environment }}
           continue-on-error: ${{ inputs.trivy-continue-on-error }}
-      
+
       - name: Rename SARIF File
         id: rename
         if: always()
@@ -332,12 +324,7 @@ jobs:
           source-file: 'trivy-results.sarif'
           environment: ${{ inputs.environment }}
       
-      - name: Upload SARIF to GitHub Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@396bb3e45325a47dd769a2e68cad5aaf65f08867 # v3.27.5
-        with:
-          sarif_file: ${{ steps.rename.outputs.renamed-file }}
-          category: trivy-${{ inputs.environment }}
+      # Note: SARIF upload is handled by the scan-trivy composite action
 
   # ============================================================================
   # Job 4: Aggregate Security Results
@@ -423,4 +410,17 @@ jobs:
         with:
           working-directory: ${{ inputs.working-directory }}
           environment: ${{ inputs.environment }}
+          terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
+          plan-hash: ${{ steps.plan.outputs.plan-hash }}
           plan-exitcode: ${{ steps.plan.outputs.exitcode }}
+          github-token: ${{ secrets.ORG_GITHUB_TOKEN }}
+          # Validation results
+          fmt-status: ${{ needs.validate.outputs.fmt-status }}
+          validate-status: ${{ needs.validate.outputs.validate-status }}
+          tflint-status: ${{ needs.validate.outputs.tflint-status }}
+          # Security scan results
+          tfsec-status: ${{ needs.aggregate-security.outputs.tfsec-status }}
+          tfsec-severity: ${{ inputs.tfsec-severity }}
+          trivy-status: ${{ needs.aggregate-security.outputs.trivy-status }}
+          trivy-severity: ${{ inputs.trivy-severity }}
+          security-passed: ${{ needs.aggregate-security.outputs.all-passed }}
