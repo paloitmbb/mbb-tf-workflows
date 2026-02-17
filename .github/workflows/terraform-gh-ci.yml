@@ -2,7 +2,7 @@ name: Reusable Terraform GitHub Provider CI
 
 # ============================================================================
 # GitHub Provider CI Workflow
-# 
+#
 # This workflow provides CI for Terraform code using GitHub provider with
 # HTTP backend state storage via GitHub Releases.
 #
@@ -23,121 +23,121 @@ on:
         required: false
         type: string
         default: '1.7.0'
-      
+
       working-directory:
         description: 'Working directory containing Terraform code'
         required: false
         type: string
         default: '.'
-      
+
       environment:
         description: 'Target environment (dev, staging, prod)'
         required: true
         type: string
-      
+
       # Security Scanner Toggles
       enable-tfsec:
         description: 'Enable tfsec Terraform security scanning'
         required: false
         type: boolean
         default: true
-      
+
       enable-trivy:
         description: 'Enable Trivy security scanning'
         required: false
         type: boolean
         default: true
-      
+
       # Linting
       enable-tflint:
         description: 'Enable tflint code quality linting'
         required: false
         type: boolean
         default: false
-      
+
       tflint-version:
         description: 'tflint version to use'
         required: false
         type: string
         default: 'v0.60.0'
-      
+
       # Security Scanner Severity Thresholds
       tfsec-severity:
         description: 'Minimum tfsec severity to fail (LOW, MEDIUM, HIGH, CRITICAL)'
         required: false
         type: string
         default: 'HIGH'
-      
+
       trivy-severity:
         description: 'Minimum Trivy severity to fail (CRITICAL, HIGH, MEDIUM, LOW)'
         required: false
         type: string
         default: 'HIGH'
-      
+
       # Continue-on-error Control (Audit Mode for Phase 1)
       tfsec-continue-on-error:
         description: 'Continue workflow if tfsec scan fails (recommended: true for visibility)'
         required: false
         type: boolean
         default: true
-      
+
       trivy-continue-on-error:
         description: 'Continue workflow if Trivy scan fails (recommended: true for visibility)'
         required: false
         type: boolean
         default: true
-      
+
       aggregate-continue-on-error:
         description: 'Continue workflow if security aggregation fails'
         required: false
         type: boolean
         default: true
-      
+
       # Terraform
       terraform-var-file:
         description: 'Terraform variable file (e.g., dev.tfvars, prod.tfvars)'
         required: false
         type: string
         default: ''
-      
+
       # HTTP Backend Configuration
       backend-config-file:
         description: 'Path to HTTP backend configuration file (e.g., backend.tfvars)'
         required: false
         type: string
         default: ''
-      
+
       backend-config:
         description: 'Inline HTTP backend configuration (key=value pairs, newline-separated)'
         required: false
         type: string
         default: ''
-      
+
       # PR Comment
       enable-pr-comment:
         description: 'Enable PR comment with plan output'
         required: false
         type: boolean
         default: true
-      
+
       # Execution
       runner-os:
         description: 'Runner OS for all jobs'
         required: false
         type: string
         default: 'ubuntu-latest'
-      
+
       timeout-minutes:
         description: 'Maximum execution time in minutes for plan job'
         required: false
         type: number
         default: 60
-    
+
     secrets:
       ORG_GITHUB_TOKEN:
         description: 'GitHub PAT with repo and admin:org permissions for provider and HTTP backend'
         required: true
-    
+
     outputs:
       # Validate outputs
       terraform-version:
@@ -152,7 +152,7 @@ on:
       tflint-status:
         description: 'tflint validation status'
         value: ${{ jobs.validate.outputs.tflint-status }}
-      
+
       # Security outputs
       security-all-passed:
         description: 'Whether all enabled security scans passed (true/false)'
@@ -163,7 +163,7 @@ on:
       trivy-status:
         description: 'Trivy scan status (success/failure/skipped)'
         value: ${{ jobs.aggregate-security.outputs.trivy-status }}
-      
+
       # Plan outputs
       plan-exitcode:
         description: 'Terraform plan exit code (0=no changes, 2=changes)'
@@ -197,20 +197,20 @@ jobs:
       fmt-status: ${{ steps.validate.outputs.fmt-status }}
       validate-status: ${{ steps.validate.outputs.validate-status }}
       tflint-status: ${{ steps.validate.outputs.tflint-status }}
-    
+
     steps:
       - name: Terraform Setup
         id: setup-tf
         uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
         with:
           terraform-version: ${{ inputs.terraform-version }}
-      
+
       - name: Terraform Init (Backend Disabled for Validation)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'false'
-      
+
       - name: Terraform Validate
         id: validate
         uses: paloitmbb/mbb-tf-actions/actions/terraform-validate@main
@@ -218,7 +218,7 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           enable-tflint: ${{ inputs.enable-tflint }}
           tflint-version: ${{ inputs.tflint-version }}
-      
+
       - name: Validation Results Summary
         if: always()
         shell: bash
@@ -244,21 +244,22 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read  # Required for SARIF upload telemetry
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
-    
+
     steps:
       - name: Terraform Setup
         uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
         with:
           terraform-version: ${{ inputs.terraform-version }}
-      
+
       - name: Terraform Init (Backend Disabled)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'false'
-      
+
       - name: tfsec Security Scan
         id: scan
         uses: paloitmbb/mbb-tf-actions/actions/scan-tfsec@main
@@ -290,21 +291,22 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read  # Required for SARIF upload telemetry
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
-    
+
     steps:
       - name: Terraform Setup
         uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
         with:
           terraform-version: ${{ inputs.terraform-version }}
-      
+
       - name: Terraform Init (Backend Disabled)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'false'
-      
+
       - name: Trivy Security Scan
         id: scan
         uses: paloitmbb/mbb-tf-actions/actions/scan-trivy@main
@@ -323,7 +325,7 @@ jobs:
           scanner-name: 'trivy'
           source-file: 'trivy-results.sarif'
           environment: ${{ inputs.environment }}
-      
+
       # Note: SARIF upload is handled by the scan-trivy composite action
 
   # ============================================================================
@@ -340,7 +342,7 @@ jobs:
       all-passed: ${{ steps.aggregate.outputs.all-passed }}
       tfsec-status: ${{ steps.aggregate.outputs.tfsec-status }}
       trivy-status: ${{ steps.aggregate.outputs.trivy-status }}
-    
+
     steps:
       - name: Aggregate Security Results
         id: aggregate
@@ -350,7 +352,7 @@ jobs:
           tfsec-outcome: ${{ needs.tfsec-scan.outputs.outcome || 'skipped' }}
           trivy-enabled: ${{ inputs.enable-trivy }}
           trivy-outcome: ${{ needs.trivy-scan.outputs.outcome || 'skipped' }}
-      
+
       - name: Security Results Summary
         shell: bash
         run: |
@@ -374,14 +376,14 @@ jobs:
     timeout-minutes: ${{ inputs.timeout-minutes }}
     outputs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
-    
+
     steps:
       - name: Terraform Setup
         id: setup-tf
         uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
         with:
           terraform-version: ${{ inputs.terraform-version }}
-      
+
       - name: Terraform Init (with HTTP Backend)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
@@ -390,7 +392,7 @@ jobs:
           backend-type: 'http'
           backend-config-file: ${{ inputs.backend-config-file }}
           backend-config: ${{ inputs.backend-config }}
-      
+
       - name: Generate Terraform Plan
         id: plan
         uses: paloitmbb/mbb-tf-actions/actions/terraform-plan@main
@@ -403,7 +405,7 @@ jobs:
           generate-attestation: 'false'
           generate-metadata: 'false'
           show-summary: 'true'
-      
+
       - name: PR Comment with Plan
         if: github.event_name == 'pull_request' && inputs.enable-pr-comment == true
         uses: paloitmbb/mbb-tf-actions/actions/pr-comment-plan@main

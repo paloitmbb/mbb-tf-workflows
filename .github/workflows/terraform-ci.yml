@@ -2,7 +2,7 @@ name: Reusable Terraform CI
 
 # ============================================================================
 # Consolidated CI Workflow
-# 
+#
 # This workflow replaces the orchestrator pattern with a single reusable
 # workflow containing all CI jobs: validate, security (parallel), and plan.
 #
@@ -23,139 +23,139 @@ on:
         required: false
         type: string
         default: '1.7.0'
-      
+
       working-directory:
         description: 'Working directory containing Terraform code'
         required: false
         type: string
         default: '.'
-      
+
       environment:
         description: 'Target environment (dev, staging, prod)'
         required: true
         type: string
-      
+
       # Security Scanner Toggles
       enable-tfsec:
         description: 'Enable tfsec Terraform security scanning'
         required: false
         type: boolean
         default: true
-      
+
       enable-trivy:
         description: 'Enable Trivy security scanning'
         required: false
         type: boolean
         default: true
-      
+
       # Security Scanner Severity Thresholds
       tfsec-severity:
         description: 'Minimum tfsec severity to fail (LOW, MEDIUM, HIGH, CRITICAL)'
         required: false
         type: string
         default: 'HIGH'
-      
+
       trivy-severity:
         description: 'Minimum Trivy severity to fail (CRITICAL, HIGH, MEDIUM, LOW)'
         required: false
         type: string
         default: 'HIGH'
-      
+
       # Continue-on-error Control
       tfsec-continue-on-error:
         description: 'Continue workflow if tfsec scan fails (recommended: true for visibility)'
         required: false
         type: boolean
         default: true
-      
+
       trivy-continue-on-error:
         description: 'Continue workflow if Trivy scan fails (recommended: true for visibility)'
         required: false
         type: boolean
         default: true
-      
+
       aggregate-continue-on-error:
         description: 'Continue workflow if security aggregation fails'
         required: false
         type: boolean
         default: true
-      
+
       # Linting
       enable-tflint:
         description: 'Enable tflint code quality linting'
         required: false
         type: boolean
         default: true
-      
+
       tflint-version:
         description: 'tflint version to use'
         required: false
         type: string
         default: 'v0.60.0'
-      
+
       # Terraform
       terraform-var-file:
         description: 'Terraform variable file (e.g., dev.tfvars, prod.tfvars)'
         required: false
         type: string
         default: ''
-      
+
       # Artifacts
       artifact-retention-days:
         description: 'Number of days to retain plan artifacts (1-90, uses repository default if not specified)'
         required: false
         type: number
-      
+
       # Execution
       runner-os:
         description: 'Default runner OS for all jobs (can be overridden per job)'
         required: false
         type: string
         default: 'ubuntu-latest'
-      
+
       validate-runner-os:
         description: 'Runner OS for validation job (defaults to runner-os)'
         required: false
         type: string
         default: ''
-      
+
       security-runner-os:
         description: 'Runner OS for security scan jobs (defaults to runner-os)'
         required: false
         type: string
         default: ''
-      
+
       plan-runner-os:
         description: 'Runner OS for plan job (defaults to runner-os)'
         required: false
         type: string
         default: ''
-      
+
       timeout-minutes:
         description: 'Maximum execution time in minutes for plan job'
         required: false
         type: number
         default: 60
-      
+
       # Azure Storage for SARIF Upload
       sarif-storage-account-name:
         description: 'Azure Storage Account name for SARIF uploads (leave empty to skip upload)'
         required: false
         type: string
         default: ''
-      
+
       sarif-storage-container-name:
         description: 'Azure Storage Container name for SARIF uploads'
         required: false
         type: string
         default: 'security-scans'
-      
+
       sarif-storage-destination-path:
         description: 'Destination path prefix in blob storage (e.g., sarif-results/)'
         required: false
         type: string
         default: 'sarif-results/'
-    
+
     secrets:
       AZURE_CLIENT_ID:
         description: 'Azure App Registration Client ID for OIDC authentication'
@@ -166,7 +166,7 @@ on:
       AZURE_SUBSCRIPTION_ID:
         description: 'Azure Subscription ID for OIDC authentication'
         required: true
-    
+
     outputs:
       # Validate outputs
       terraform-version:
@@ -181,7 +181,7 @@ on:
       tflint-status:
         description: 'tflint validation status'
         value: ${{ jobs.validate.outputs.tflint-status }}
-      
+
       # Security outputs
       security-all-passed:
         description: 'Whether all enabled security scans passed (true/false)'
@@ -192,7 +192,7 @@ on:
       trivy-status:
         description: 'Trivy scan status (success/failure/skipped)'
         value: ${{ jobs.aggregate-security.outputs.trivy-status }}
-      
+
       # Plan outputs
       plan-artifact-name:
         description: 'Name of uploaded Terraform plan artifact'
@@ -231,20 +231,20 @@ jobs:
       fmt-status: ${{ steps.validate.outputs.fmt-status }}
       validate-status: ${{ steps.validate.outputs.validate-status }}
       tflint-status: ${{ steps.validate.outputs.tflint-status }}
-    
+
     steps:
       - name: Common Setup
         id: setup-tf
         uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
         with:
           terraform-version: ${{ inputs.terraform-version }}
-      
+
       - name: Terraform Init (Backend Disabled)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'false'
-      
+
       - name: Terraform Validate
         id: validate
         uses: paloitmbb/mbb-tf-actions/actions/terraform-validate@main
@@ -252,7 +252,7 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           enable-tflint: ${{ inputs.enable-tflint }}
           tflint-version: ${{ inputs.tflint-version }}
-      
+
       - name: Validation Results Summary
         if: always()
         shell: bash
@@ -279,21 +279,22 @@ jobs:
       id-token: write      # Required for Azure OIDC authentication
       contents: read
       security-events: write
+      actions: read        # Required for SARIF upload telemetry
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
-    
+
     steps:
       - name: Common Setup
         uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
         with:
           terraform-version: ${{ inputs.terraform-version }}
-      
+
       - name: Terraform Init (Backend Disabled)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'false'
-      
+
       - name: tfsec Security Scan
         id: scan
         uses: paloitmbb/mbb-tf-actions/actions/scan-tfsec@main
@@ -304,7 +305,7 @@ jobs:
           environment: ${{ inputs.environment }}
           var-file: ${{ inputs.terraform-var-file }}
           continue-on-error: ${{ inputs.tfsec-continue-on-error }}
-      
+
       - name: Rename SARIF File
         id: rename
         if: always()
@@ -313,7 +314,7 @@ jobs:
           scanner-name: 'tfsec'
           source-file: 'tfsec-results.sarif'
           environment: ${{ inputs.environment }}
-      
+
       - name: Azure OIDC Login
         if: always() && inputs.sarif-storage-account-name != ''
         uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
@@ -321,7 +322,7 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      
+
       - name: Upload SARIF to Azure Storage
         if: always() && inputs.sarif-storage-account-name != ''
         uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
@@ -346,21 +347,22 @@ jobs:
       id-token: write      # Required for Azure OIDC authentication
       contents: read
       security-events: write
+      actions: read        # Required for SARIF upload telemetry
     outputs:
       outcome: ${{ steps.scan.outputs.outcome }}
-    
+
     steps:
       - name: Common Setup
         uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
         with:
           terraform-version: ${{ inputs.terraform-version }}
-      
+
       - name: Terraform Init (Backend Disabled)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'false'
-      
+
       - name: Trivy Security Scan
         id: scan
         uses: paloitmbb/mbb-tf-actions/actions/scan-trivy@main
@@ -370,7 +372,7 @@ jobs:
           severity: ${{ inputs.trivy-severity }}
           environment: ${{ inputs.environment }}
           continue-on-error: ${{ inputs.trivy-continue-on-error }}
-      
+
       - name: Rename SARIF File
         id: rename
         if: always()
@@ -379,7 +381,7 @@ jobs:
           scanner-name: 'trivy'
           source-file: 'trivy-results.sarif'
           environment: ${{ inputs.environment }}
-      
+
       - name: Azure OIDC Login
         if: always() && inputs.sarif-storage-account-name != ''
         uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
@@ -387,7 +389,7 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      
+
       - name: Upload SARIF to Azure Storage
         if: always() && inputs.sarif-storage-account-name != ''
         uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
@@ -413,7 +415,7 @@ jobs:
       all-passed: ${{ steps.aggregate.outputs.all-passed }}
       tfsec-status: ${{ steps.aggregate.outputs.tfsec-status }}
       trivy-status: ${{ steps.aggregate.outputs.trivy-status }}
-    
+
     steps:
       - name: Aggregate Security Results
         id: aggregate
@@ -423,7 +425,7 @@ jobs:
           tfsec-outcome: ${{ needs.tfsec-scan.outputs.outcome || 'skipped' }}
           trivy-enabled: ${{ inputs.enable-trivy }}
           trivy-outcome: ${{ needs.trivy-scan.outputs.outcome || 'skipped' }}
-      
+
       - name: Security Results Summary
         shell: bash
         run: |
@@ -435,7 +437,7 @@ jobs:
           echo "| Trivy | ${{ steps.aggregate.outputs.trivy-status }} | ${{ inputs.trivy-severity }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Overall Result:** ${{ steps.aggregate.outputs.all-passed == 'true' && '✅ PASSED' || '❌ FAILED' }}" >> $GITHUB_STEP_SUMMARY
-      
+
       - name: Fail if security scans failed
         if: steps.aggregate.outputs.all-passed == 'false'
         shell: bash
@@ -456,27 +458,27 @@ jobs:
       artifact-name: ${{ steps.plan.outputs.artifact-name }}
       exitcode: ${{ steps.plan.outputs.exitcode }}
       plan-hash: ${{ steps.plan.outputs.plan-hash }}
-    
+
     steps:
       - name: Common Setup
         id: setup-tf
         uses: paloitmbb/mbb-tf-actions/actions/terraform-setup@main
         with:
           terraform-version: ${{ inputs.terraform-version }}
-      
+
       - name: Azure OIDC Login
         uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      
+
       - name: Terraform Init (with Backend)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'true'
-      
+
       - name: Generate Terraform Plan
         id: plan
         uses: paloitmbb/mbb-tf-actions/actions/terraform-plan@main
