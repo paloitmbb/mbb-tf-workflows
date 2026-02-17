@@ -1,99 +1,60 @@
-# Environment Structure Guide
+﻿# Environment Structure Guide
 
-This guide explains how to organize your Terraform infrastructure code for the **paloitmbb/mbb-tf-workflows** reusable workflows.
+Concise patterns for structuring Terraform repositories that consume the **paloitmbb/mbb-tf-workflows** reusable workflows.
 
-## Overview
-
-The workflows expect a **multi-environment monorepo structure** where each environment (dev, stage, prod) has its own directory with environment-specific configurations, while shared logic lives in reusable modules.
-
-## Recommended Directory Structure
+## Recommended Layout
 
 ```
 your-terraform-repo/
-├── .github/
-│   └── workflows/
-│       ├── terraform-ci.yml                 # Post-merge CI pipeline
-│       └── pr-security-check.yml            # PR security validation
+├── .github/workflows/
+│   ├── terraform-ci.yml          # Post-merge pipeline (calls terraform-ci.yml)
+│   └── pr-security-check.yml     # PR validation (calls terraform-security.yml)
 │
-├── env/                                     # Environment-specific configurations
+├── env/
 │   ├── dev/
-│   │   ├── backend.tf                       # Azure Storage backend (dev)
-│   │   ├── provider.tf                      # Azure provider with OIDC
-│   │   ├── main.tf                          # Calls to ../modules/*
-│   │   ├── variables.tf                     # Input variable declarations
-│   │   ├── outputs.tf                       # Output value declarations
-│   │   └── terraform.tfvars                 # Dev-specific variable values
-│   │
+│   │   ├── backend.tf            # Azure Storage backend (dev)
+│   │   ├── provider.tf           # AzureRM provider w/ OIDC
+│   │   ├── main.tf               # Calls ../../modules/*
+│   │   ├── variables.tf          # Input declarations
+│   │   ├── outputs.tf            # Environment outputs
+│   │   └── terraform.tfvars      # Non-sensitive values
 │   ├── stage/
-│   │   ├── backend.tf                       # Azure Storage backend (stage)
-│   │   ├── provider.tf                      # Azure provider with OIDC
-│   │   ├── main.tf                          # Calls to ../modules/*
-│   │   ├── variables.tf                     # Input variable declarations
-│   │   ├── outputs.tf                       # Output value declarations
-│   │   └── terraform.tfvars                 # Stage-specific variable values
-│   │
-│   └── prod/
-│       ├── backend.tf                       # Azure Storage backend (prod)
-│       ├── provider.tf                      # Azure provider with OIDC
-│       ├── main.tf                          # Calls to ../modules/*
-│       ├── variables.tf                     # Input variable declarations
-│       ├── outputs.tf                       # Output value declarations
-│       └── terraform.tfvars                 # Prod-specific variable values
+│   └── prod/                     # Same file set per environment
 │
-├── modules/                                 # Reusable Terraform modules
-│   ├── compute/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   │
+├── modules/                      # Reusable building blocks
 │   ├── network/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   │
+│   ├── compute/
 │   └── storage/
-│       ├── main.tf
-│       ├── variables.tf
-│       └── outputs.tf
 │
-├── docs/                                    # Documentation
-│   ├── GITHUB-ACTIONS-SETUP.md             # Azure OIDC setup guide
-│   └── WORKFLOW-REFERENCE.md               # Workflow parameter reference
-│
-└── README.md                                # Project overview
-
+├── docs/
+│   ├── GITHUB-ACTIONS-SETUP.md   # OIDC checklist
+│   └── WORKFLOW-REFERENCE.md     # Workflow input matrix
+└── README.md
 ```
 
-## File Purposes
+## File Responsibilities
 
-### Environment Files (`env/{dev,stage,prod}/`)
-
-#### `backend.tf`
-Configures remote state storage. Uses Azure Storage Account with OIDC authentication.
+### `env/<env>/backend.tf`
+Remote state per environment. Always set `use_oidc = true` so the backend authenticates with the same federated credential as the workflow.
 
 ```hcl
-# env/dev/backend.tf
 terraform {
   backend "azurerm" {
     resource_group_name  = "rg-terraform-state-dev"
-    storage_account_name = "sttfstatedev12345"
+    storage_account_name = "sttfstate001"
     container_name       = "tfstate"
-    key                  = "dev.terraform.tfstate"
-    
-    # OIDC authentication (no static credentials)
-    use_oidc = true
+    key                  = "dev/terraform.tfstate"
+    use_oidc             = true
   }
 }
 ```
 
-#### `provider.tf`
-Configures the Azure provider with OIDC authentication.
+### `env/<env>/provider.tf`
+Centralises Terraform/AzureRM version pins and enables OIDC-based auth.
 
 ```hcl
-# env/dev/provider.tf
 terraform {
   required_version = ">= 1.7.0"
-  
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -104,299 +65,99 @@ terraform {
 
 provider "azurerm" {
   features {}
-  
-  # OIDC authentication (credentials from environment variables)
-  use_oidc            = true
-  subscription_id     = var.subscription_id
-  tenant_id           = var.tenant_id
-  client_id           = var.client_id
+  use_oidc        = true
+  subscription_id = var.subscription_id
+  tenant_id       = var.tenant_id
+  client_id       = var.client_id
 }
 ```
 
-#### `main.tf`
-Environment-specific infrastructure composition. Calls reusable modules with environment-specific values.
+### `env/<env>/main.tf`
+Keeps environments thin by delegating to modules. Reference module outputs rather than duplicating resources.
 
 ```hcl
-# env/dev/main.tf
 module "network" {
-  source = "../../modules/network"
-  
-  environment         = var.environment
-  location            = var.location
-  address_space       = var.vnet_address_space
-  subnet_prefixes     = var.subnet_prefixes
-}
-
-module "compute" {
-  source = "../../modules/compute"
-  
-  environment         = var.environment
-  location            = var.location
-  subnet_id           = module.network.subnet_ids["app"]
-  vm_size             = var.vm_size
+  source       = "../../modules/network"
+  environment  = var.environment
+  location     = var.location
+  address_space = var.vnet_address_space
 }
 
 module "storage" {
-  source = "../../modules/storage"
-  
-  environment              = var.environment
-  location                 = var.location
-  account_tier             = var.storage_account_tier
+  source                  = "../../modules/storage"
+  environment             = var.environment
+  location                = var.location
+  account_tier            = var.storage_account_tier
   account_replication_type = var.storage_replication_type
 }
 ```
 
-#### `variables.tf`
-Variable declarations (no values, just definitions).
+### `variables.tf`, `outputs.tf`, `terraform.tfvars`
+- **variables.tf**: only declarations (mark subscription/tenant/client as `sensitive`).
+- **outputs.tf**: expose IDs the platform team needs (e.g., storage account name, subnet IDs).
+- **terraform.tfvars**: commit non-secret values; inject secrets via `TF_VAR_*` environment variables or GitHub environment secrets.
 
-```hcl
-# env/dev/variables.tf
-variable "environment" {
-  description = "Environment name (dev, stage, prod)"
-  type        = string
-}
+## Modules Folder
 
-variable "location" {
-  description = "Azure region for resources"
-  type        = string
-}
-
-variable "subscription_id" {
-  description = "Azure Subscription ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "tenant_id" {
-  description = "Azure Tenant ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "client_id" {
-  description = "Azure Client ID for OIDC"
-  type        = string
-  sensitive   = true
-}
-
-# ... other variables
-```
-
-#### `outputs.tf`
-Output values for reference by other systems or environments.
-
-```hcl
-# env/dev/outputs.tf
-output "network_id" {
-  description = "Virtual Network ID"
-  value       = module.network.vnet_id
-}
-
-output "subnet_ids" {
-  description = "Map of subnet names to IDs"
-  value       = module.network.subnet_ids
-}
-
-output "storage_account_name" {
-  description = "Storage account name"
-  value       = module.storage.storage_account_name
-}
-```
-
-#### `terraform.tfvars`
-Environment-specific variable values.
-
-```hcl
-# env/dev/terraform.tfvars
-environment = "dev"
-location    = "eastus"
-
-# Network
-vnet_address_space = ["10.0.0.0/16"]
-subnet_prefixes    = {
-  app = "10.0.1.0/24"
-  db  = "10.0.2.0/24"
-}
-
-# Compute
-vm_size = "Standard_B2s"
-
-# Storage
-storage_account_tier        = "Standard"
-storage_replication_type    = "LRS"
-
-# Azure OIDC (values from environment variables in CI/CD)
-subscription_id = "00000000-0000-0000-0000-000000000000"  # Example only
-tenant_id       = "00000000-0000-0000-0000-000000000000"  # Example only
-client_id       = "00000000-0000-0000-0000-000000000000"  # Example only
-```
-
-**Note**: Sensitive values (subscription_id, tenant_id, client_id) are injected via environment variables in CI/CD workflows using GitHub secrets.
-
-### Module Files (`modules/*/`)
-
-Each module encapsulates reusable infrastructure components.
-
-```hcl
-# modules/network/main.tf
-resource "azurerm_virtual_network" "main" {
-  name                = "vnet-${var.environment}"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.main.name
-  address_space       = var.address_space
-}
-
-resource "azurerm_subnet" "subnets" {
-  for_each = var.subnet_prefixes
-  
-  name                 = "snet-${each.key}-${var.environment}"
-  resource_group_name  = azurerm_resource_group.main.name
-  virtual_network_name = azurerm_virtual_network.main.name
-  address_prefixes     = [each.value]
-}
-```
-
-## Alternative Structures
-
-### Option 1: Workspace-Based (Single Directory)
-
-```
-terraform/
-├── main.tf
-├── variables.tf
-├── outputs.tf
-├── backend.tf
-├── dev.tfvars
-├── stage.tfvars
-└── prod.tfvars
-```
-
-**Workflow configuration**:
-```yaml
-with:
-  working-directory: './terraform'
-  environment: 'dev'
-  terraform-var-file: 'dev.tfvars'
-```
-
-**Pros**: Simpler structure
-**Cons**: Shared state, harder to separate environments, difficult to manage environment-specific backends
-
-### Option 2: Nested Environments (Deep Hierarchy)
-
-```
-infrastructure/
-└── azure/
-    └── regions/
-        └── eastus/
-            └── environments/
-                ├── dev/
-                ├── stage/
-                └── prod/
-```
-
-**Workflow configuration**:
-```yaml
-with:
-  working-directory: './infrastructure/azure/regions/eastus/environments/dev'
-  environment: 'dev'
-```
-
-**Pros**: Very organized for complex multi-region setups
-**Cons**: Deep paths can be cumbersome, more complexity than needed for simple projects
+Group reusable resources under `modules/` and keep inputs consistent across environments (e.g., `environment`, `location`, `tags`). This keeps `env/<env>/main.tf` focused on wiring rather than implementation.
 
 ## Workflow Integration
 
-### Environment Detection
+Pair the layout above with the shared workflows:
 
-The workflows can auto-detect the target environment based on file paths or branch names:
+1. Detect the environment automatically.
+2. Call the reusable workflow with the detected directory, `terraform.tfvars`, and OIDC secrets.
 
 ```yaml
-# .github/workflows/terraform-ci.yml
 jobs:
-  detect-environment:
+  prepare:
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.detect.outputs.environment }}
+      working-directory: ${{ steps.detect.outputs.working-directory }}
     steps:
       - uses: actions/checkout@v4
       - id: detect
-        run: |
-          # Detect from changed files
-          if git diff --name-only origin/main | grep -q "^env/prod/"; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
-          elif git diff --name-only origin/main | grep -q "^env/stage/"; then
-            echo "environment=stage" >> $GITHUB_OUTPUT
-          else
-            echo "environment=dev" >> $GITHUB_OUTPUT
-          fi
-```
+        uses: paloitmbb/mbb-tf-actions/actions/determine-environment@main
+        with:
+          fallback-environment: 'dev'
 
-### Dynamic Working Directory
-
-```yaml
-jobs:
   terraform-ci:
+    needs: prepare
     uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     with:
-      working-directory: ./env/${{ needs.detect.outputs.environment }}
-      environment: ${{ needs.detect.outputs.environment }}
+      working-directory: ${{ needs.prepare.outputs.working-directory }}
+      environment: ${{ needs.prepare.outputs.environment }}
+      terraform-var-file: 'terraform.tfvars'
+      enable-tfsec: true
+      enable-trivy: true
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 ```
+
+## Alternative Topologies
+
+| Layout | When to use | Notes |
+|--------|-------------|-------|
+| **Single directory + tfvars** | Small proofs of concept | Keep `backend.tf` + `main.tf` at repo root, point workflows to `./terraform` and switch `terraform-var-file`. State isolation relies on different keys. |
+| **Nested regions** | Multi-region orgs | e.g., `infrastructure/azure/<region>/env/dev`. Update `working-directory` accordingly. Deeper trees mean longer plan paths but mirror real org charts. |
 
 ## Best Practices
 
-### 1. Separate Backend Configurations
-Each environment should have its own backend configuration to prevent state collision.
+- Separate backend keys per environment (`dev/terraform.tfstate`, `stage/terraform.tfstate`, ...).
+- Use OIDC everywhere (backend + provider) and never store client secrets.
+- Keep environment layers declarative—modules own resource definitions.
+- Commit non-sensitive tfvars; push secrets via repository/environment secrets.
+- Reuse Terraform wrapper modules instead of copying resources between environments.
+- Stick to consistent naming (`rg-<app>-<env>`, `st<app><env>###`) so automation can map resources easily.
 
-✅ **Good**: Separate state files
-```hcl
-# env/dev/backend.tf
-key = "dev.terraform.tfstate"
+## Related Docs
 
-# env/prod/backend.tf
-key = "prod.terraform.tfstate"
-```
-
-❌ **Bad**: Shared state file
-```hcl
-# All environments use the same key
-key = "terraform.tfstate"
-```
-
-### 2. Use OIDC for Authentication
-Never commit static credentials. Use OIDC with GitHub secrets.
-
-✅ **Good**: OIDC authentication
-```hcl
-provider "azurerm" {
-  use_oidc        = true
-  subscription_id = var.subscription_id  # From environment variable in CI/CD
-}
-```
-
-❌ **Bad**: Static credentials
-```hcl
-provider "azurerm" {
-  client_secret = "super-secret-value"  # NEVER DO THIS
-}
-```
-
-### 3. DRY Modules
-Keep environment-specific code minimal. Most logic should be in reusable modules.
-
-✅ **Good**: Thin environment layer
-```hcl
-# env/dev/main.tf (10 lines)
-module "network" {
-  source = "../../modules/network"
-  environment = "dev"
-}
-```
-
-❌ **Bad**: Duplicated code per environment
-```hcl
-# env/dev/main.tf (500 lines of duplicated resource definitions)
-```
+- `docs/AZURE-OIDC-QUICKSTART.md` – full OIDC setup.
+- `example/terraform-ci-example.yml` – pipeline reference.
+- `example/pr-security-check-example.yml` – PR validation pattern.
 
 ### 4. Version Control for tfvars
 Commit non-sensitive tfvars to version control. Use GitHub secrets for sensitive values.

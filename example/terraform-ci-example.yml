@@ -1,10 +1,10 @@
 # Example: Complete Terraform CI Pipeline
-# 
-# This workflow demonstrates the full CI pipeline using terraform-ci.yml
-# for comprehensive validation, security scanning, and plan generation.
 #
-# Use this for: Post-merge validation, comprehensive testing
-# Estimated time: ~4-6 minutes (with parallel security scans)
+# This workflow demonstrates the full CI pipeline using terraform-ci.yml for
+# validation, tfsec + Trivy scans, SARIF uploads, and signed plan artifacts.
+#
+# Use this for: Post-merge validation or protected branch builds
+# Estimated time: ~4-6 minutes (parallel security scans)
 
 name: Terraform CI Pipeline
 
@@ -48,29 +48,19 @@ jobs:
   # Determine which environment to target based on branch or manual input
   # ============================================================================
   prepare:
-    name: Prepare Environment Configuration
+    name: Determine Environment
     runs-on: ubuntu-latest
     outputs:
-      environment: ${{ steps.set-env.outputs.environment }}
-      working-directory: ${{ steps.set-env.outputs.working-directory }}
+      environment: ${{ steps.detect.outputs.environment }}
+      working-directory: ${{ steps.detect.outputs.working-directory }}
     
     steps:
-      - name: Determine Environment
-        id: set-env
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            ENV="${{ github.event.inputs.environment }}"
-          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            ENV="prod"
-          elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
-            ENV="stage"
-          else
-            ENV="dev"
-          fi
-          
-          echo "environment=${ENV}" >> $GITHUB_OUTPUT
-          echo "working-directory=./env/${ENV}" >> $GITHUB_OUTPUT
-          echo "📍 Target Environment: **${ENV}**" >> $GITHUB_STEP_SUMMARY
+      - uses: paloitmbb/mbb-tf-actions/actions/determine-environment@main
+        id: detect
+        with:
+          manual-environment: ${{ github.event.inputs.environment || '' }}
+          fallback-environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/develop' && 'stage' || 'dev' }}
+          working-directory-prefix: './env'
 
   # ============================================================================
   # Run complete Terraform CI pipeline
@@ -90,21 +80,18 @@ jobs:
       enable-tflint: true
       tflint-version: 'v0.60.0'
       
-      # Security Scanners (all enabled by default)
+      # Security Scanners (tfsec + Trivy in parallel)
       enable-tfsec: true
-      enable-checkov: true
       enable-trivy: true
       
       # Security Severity Thresholds (HIGH by default)
       tfsec-severity: 'HIGH'
-      checkov-severity: 'HIGH'
       trivy-severity: 'HIGH'
       
       # Continue-on-error Control
       tfsec-continue-on-error: true        # Allow all scans to run
-      checkov-continue-on-error: true      # Comprehensive visibility
       trivy-continue-on-error: true        # Full security posture
-      aggregate-continue-on-error: false   # Block on aggregate failure
+      aggregate-continue-on-error: false   # Fail fast if aggregate fails
       
       # Execution Configuration
       runner-os: 'ubuntu-latest'

@@ -8,6 +8,7 @@ Demonstrating how to use the **paloitmbb/mbb-tf-workflows** in your Terraform in
 |--------------|---------|-------------|
 | **[terraform-ci-example.yml](terraform-ci-example.yml)** | Complete CI pipeline (validate + security + plan) | Post-merge validation, comprehensive checks with plan artifacts and attestation |
 | **[pr-security-check-example.yml](pr-security-check-example.yml)** | PR security scanning with plan preview | Pull request validation with security checks and infrastructure change preview |
+| **[terraform-gh-ci-example.md](terraform-gh-ci-example.md)** | GitHub provider CI pattern (HTTP backend + PAT auth) | Repos like `mbb-iac` that manage GitHub org resources without Azure dependencies |
 | **[ENVIRONMENT-STRUCTURE-GUIDE.md](ENVIRONMENT-STRUCTURE-GUIDE.md)** | Environment organization patterns | Planning directory structure and migration from existing projects |
 
 ---
@@ -26,7 +27,7 @@ cp terraform-ci-example.yml .github/workflows/terraform-ci.yml
 
 **Features**:
 - ✅ Validates Terraform syntax, formatting, and code quality
-- ✅ Runs parallel security scans (tfsec, Checkov, Trivy)
+- ✅ Runs parallel security scans (tfsec, Trivy)
 - ✅ Generates Terraform plan with Azure OIDC authentication
 - ✅ Uploads SARIF results to GitHub Security tab
 - ✅ Creates signed plan attestation (SLSA compliance)
@@ -45,7 +46,7 @@ cp pr-security-check-example.yml .github/workflows/pr-security-check.yml
 ```
 
 **Features**:
-- ✅ Security scans (tfsec, Checkov, Trivy) with SARIF upload
+- ✅ Security scans (tfsec, Trivy) with SARIF upload
 - ✅ Plan preview with Azure OIDC authentication
 - ✅ Shows actual infrastructure changes in job summary
 - ✅ Moderate feedback time (6-8 minutes with parallel scans)
@@ -168,7 +169,7 @@ your-terraform-repo/
 
 ### Configurable Severity Thresholds
 
-All three security scanners (tfsec, Checkov, Trivy) support configurable severity:
+Both security scanners (tfsec, Trivy) support configurable severity:
 
 **Available Severity Levels**:
 - `CRITICAL` - Only critical vulnerabilities fail the workflow
@@ -237,7 +238,7 @@ with:
 resource "azurerm_storage_account" "example" {
   # Scanned ✅
   name                     = var.storage_account_name
-  
+
   # ⚠️ Skipped (dynamic, scanner can't evaluate)
   enable_https_traffic_only = var.enable_https
 }
@@ -379,7 +380,7 @@ jobs:
             ENV="stage"
           fi
           echo "environment=${ENV}" >> $GITHUB_OUTPUT
-  
+
   terraform-ci:
     needs: prepare
     uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
@@ -450,7 +451,7 @@ jobs:
   terraform-ci:
     uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     # ... configuration ...
-  
+
   notify-changes:
     needs: terraform-ci
     runs-on: ubuntu-latest

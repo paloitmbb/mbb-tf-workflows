@@ -1,10 +1,10 @@
 # Example: PR Security Check with Plan Preview
-# 
-# This workflow demonstrates using terraform-security.yml for PR validation
-# with comprehensive security scanning and plan preview.
+#
+# This workflow calls terraform-security.yml for PR validation with
+# tfsec + Trivy scanning and a plan preview.
 #
 # Use this for: Pull request validation before code review
-# Estimated time: ~6-8 minutes
+# Estimated time: ~5-6 minutes (parallel scanners)
 
 name: PR Security & Plan Preview
 
@@ -90,17 +90,14 @@ jobs:
       
       # Security Scanners
       enable-tfsec: true
-      enable-checkov: true
       enable-trivy: true
       
       # Use manual severity input if provided, otherwise use HIGH
       tfsec-severity: ${{ github.event.inputs.severity || 'HIGH' }}
-      checkov-severity: ${{ github.event.inputs.severity || 'HIGH' }}
       trivy-severity: ${{ github.event.inputs.severity || 'HIGH' }}
       
       # Continue-on-error Control (allow all scans for reporting)
       tfsec-continue-on-error: true        # Run all scans
-      checkov-continue-on-error: true      # Complete visibility
       trivy-continue-on-error: true        # All findings captured
       aggregate-continue-on-error: true    # Let security-gate handle failure
       
@@ -135,9 +132,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Scanner | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| tfsec   | ${{ needs.security-and-plan.outputs.tfsec-status }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Checkov | ${{ needs.security-and-plan.outputs.checkov-status }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trivy   | ${{ needs.security-and-plan.outputs.trivy-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| tfsec | ${{ needs.security-and-plan.outputs.tfsec-status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy | ${{ needs.security-and-plan.outputs.trivy-status }} |" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.security-and-plan.outputs.security-all-passed }}" != "true" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
