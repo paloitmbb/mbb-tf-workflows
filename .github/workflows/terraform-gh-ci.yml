@@ -1,18 +1,19 @@
 name: Reusable Terraform GitHub Provider CI
 
 # ============================================================================
-# GitHub Provider CI Workflow
+# GitHub Provider with Azure Storage Backend CI Workflow
 #
 # This workflow provides CI for Terraform code using GitHub provider with
-# HTTP backend state storage via GitHub Releases.
+# Azure Blob Storage backend for state management.
 #
 # Key features:
-# - HTTP backend support (no Azure dependencies)
+# - Azure Storage backend with OIDC authentication
 # - Security scans run in parallel (tfsec, Trivy)
 # - Time savings: ~2-3 minutes (parallel execution)
 # - SARIF upload to GitHub Security tab
 # - PR comment with plan output
-# - GitHub token authentication (ORG_GITHUB_TOKEN)
+# - GitHub token authentication for provider (ORG_GITHUB_TOKEN)
+# - Azure OIDC authentication for backend (no client secrets)
 # ============================================================================
 
 on:
@@ -100,15 +101,15 @@ on:
         type: string
         default: ''
 
-      # HTTP Backend Configuration
+      # Azure Backend Configuration
       backend-config-file:
-        description: 'Path to HTTP backend configuration file (e.g., backend.tfvars)'
+        description: 'Path to Azure backend configuration file (e.g., backend.tfvars)'
         required: false
         type: string
         default: ''
 
       backend-config:
-        description: 'Inline HTTP backend configuration (key=value pairs, newline-separated)'
+        description: 'Inline Azure backend configuration (key=value pairs, newline-separated)'
         required: false
         type: string
         default: ''
@@ -119,6 +120,11 @@ on:
         required: false
         type: boolean
         default: true
+
+       artifact-retention-days:
+        description: 'Number of days to retain plan artifacts (1-90, uses repository default if not specified)'
+        required: false
+        type: number
 
       # Execution
       runner-os:
@@ -135,7 +141,16 @@ on:
 
     secrets:
       ORG_GITHUB_TOKEN:
-        description: 'GitHub PAT with repo and admin:org permissions for provider and HTTP backend'
+        description: 'GitHub PAT with repo and admin:org permissions for GitHub provider'
+        required: true
+      AZURE_CLIENT_ID:
+        description: 'Azure Client ID for OIDC authentication'
+        required: true
+      AZURE_TENANT_ID:
+        description: 'Azure Tenant ID for OIDC authentication'
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        description: 'Azure Subscription ID for OIDC authentication'
         required: true
 
     outputs:
@@ -168,6 +183,15 @@ on:
       plan-exitcode:
         description: 'Terraform plan exit code (0=no changes, 2=changes)'
         value: ${{ jobs.plan.outputs.exitcode }}
+      plan-hash:
+        description: 'SHA256 hash of Terraform plan file'
+        value: ${{ jobs.plan.outputs.plan-hash }}
+      plan-artifact-name:
+        description: 'Name of uploaded plan artifact'
+        value: ${{ jobs.plan.outputs.artifact-name }}
+      plan-has-changes:
+        description: 'Whether plan detected infrastructure changes (true/false)'
+        value: ${{ jobs.plan.outputs.has-changes }}
 
 permissions:
   contents: read
@@ -181,8 +205,8 @@ env:
   TF_CLI_ARGS: '-no-color'
   # GitHub provider authentication
   GITHUB_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
-  # HTTP backend authentication
-  TF_HTTP_PASSWORD: ${{ secrets.ORG_GITHUB_TOKEN }}
+  # Azure backend authentication set by azure-oidc-login action
+  # ARM_CLIENT_ID, ARM_TENANT_ID, ARM_SUBSCRIPTION_ID, ARM_USE_OIDC
 
 jobs:
   # ============================================================================
@@ -376,6 +400,9 @@ jobs:
     timeout-minutes: ${{ inputs.timeout-minutes }}
     outputs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
+      plan-hash: ${{ steps.plan.outputs.plan-hash }}
+      artifact-name: ${{ steps.plan.outputs.artifact-name }}
+      has-changes: ${{ steps.plan.outputs.has-changes }}
 
     steps:
       - name: Terraform Setup
@@ -384,12 +411,18 @@ jobs:
         with:
           terraform-version: ${{ inputs.terraform-version }}
 
-      - name: Terraform Init (with HTTP Backend)
+      - name: Azure OIDC Login
+        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init (Azure Backend)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'true'
-          backend-type: 'http'
           backend-config-file: ${{ inputs.backend-config-file }}
           backend-config: ${{ inputs.backend-config }}
 
@@ -401,10 +434,11 @@ jobs:
           environment: ${{ inputs.environment }}
           terraform-version: ${{ steps.setup-tf.outputs.terraform-version }}
           var-file: ${{ inputs.terraform-var-file }}
-          upload-artifacts: 'false'
-          generate-attestation: 'false'
-          generate-metadata: 'false'
+          upload-artifacts: 'true'
+          generate-attestation: 'true'
+          generate-metadata: 'true'
           show-summary: 'true'
+          artifact-retention-days: ${{ inputs.artifact-retention-days }}
 
       - name: PR Comment with Plan
         if: github.event_name == 'pull_request' && inputs.enable-pr-comment == true

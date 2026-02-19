@@ -106,6 +106,19 @@ on:
         type: string
         default: ''
 
+      # Azure Backend Configuration
+      backend-config-file:
+        description: 'Path to Azure backend configuration file (e.g., environments/dev/backend.tfvars)'
+        required: false
+        type: string
+        default: ''
+
+      backend-config:
+        description: 'Inline Azure backend configuration (key=value pairs, newline-separated)'
+        required: false
+        type: string
+        default: ''
+
       # Execution
       runner-os:
         description: 'Default runner OS for all jobs (can be overridden per job)'
@@ -453,11 +466,13 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Terraform Init (Backend Enabled)
+      - name: Terraform Init (Azure Backend)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'true'
+          backend-config-file: ${{ inputs.backend-config-file }}
+          backend-config: ${{ inputs.backend-config }}
 
       - name: Generate Terraform Plan Preview
         id: plan
