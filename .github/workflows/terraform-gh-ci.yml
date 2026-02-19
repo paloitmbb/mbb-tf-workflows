@@ -198,6 +198,7 @@ permissions:
   security-events: write
   id-token: write
   pull-requests: write
+  attestations: write
 
 env:
   TF_IN_AUTOMATION: 'true'
