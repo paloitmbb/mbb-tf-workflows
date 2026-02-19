@@ -121,7 +121,7 @@ on:
         type: boolean
         default: true
 
-       artifact-retention-days:
+      artifact-retention-days:
         description: 'Number of days to retain plan artifacts (1-90, uses repository default if not specified)'
         required: false
         type: number
