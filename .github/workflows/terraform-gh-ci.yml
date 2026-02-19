@@ -286,6 +286,7 @@ jobs:
     if: inputs.enable-tfsec == true
     continue-on-error: ${{ inputs.tfsec-continue-on-error }}
     permissions:
+      id-token: write
       contents: read
       security-events: write
       actions: read  # Required for SARIF upload telemetry
@@ -352,6 +353,7 @@ jobs:
     if: inputs.enable-trivy == true
     continue-on-error: ${{ inputs.trivy-continue-on-error }}
     permissions:
+      id-token: write
       contents: read
       security-events: write
       actions: read  # Required for SARIF upload telemetry
