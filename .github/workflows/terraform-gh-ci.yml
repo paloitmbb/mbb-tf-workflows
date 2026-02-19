@@ -143,13 +143,13 @@ on:
       ORG_GITHUB_TOKEN:
         description: 'GitHub PAT with repo and admin:org permissions for GitHub provider'
         required: true
-      AZURE_CLIENT_ID:
+      ARM_CLIENT_ID:
         description: 'Azure Client ID for OIDC authentication'
         required: true
-      AZURE_TENANT_ID:
+      ARM_TENANT_ID:
         description: 'Azure Tenant ID for OIDC authentication'
         required: true
-      AZURE_SUBSCRIPTION_ID:
+      ARM_SUBSCRIPTION_ID:
         description: 'Azure Subscription ID for OIDC authentication'
         required: true
 
@@ -414,9 +414,9 @@ jobs:
       - name: Azure OIDC Login
         uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
       - name: Terraform Init (Azure Backend)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
