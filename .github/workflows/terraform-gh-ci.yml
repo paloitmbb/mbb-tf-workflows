@@ -139,6 +139,25 @@ on:
         type: number
         default: 60
 
+      # Azure Storage for SARIF Upload
+      sarif-storage-account-name:
+        description: 'Azure Storage Account name for SARIF uploads (leave empty to skip upload)'
+        required: false
+        type: string
+        default: ''
+
+      sarif-storage-container-name:
+        description: 'Azure Storage Container name for SARIF uploads'
+        required: false
+        type: string
+        default: 'security-scans'
+
+      sarif-storage-destination-path:
+        description: 'Destination path prefix in blob storage (e.g., sarif-results/)'
+        required: false
+        type: string
+        default: 'sarif-results/'
+
     secrets:
       ORG_GITHUB_TOKEN:
         description: 'GitHub PAT with repo and admin:org permissions for GitHub provider'
@@ -304,6 +323,25 @@ jobs:
           scanner-name: 'tfsec'
           source-file: 'tfsec-results.sarif'
           environment: ${{ inputs.environment }}
+
+      - name: Azure OIDC Login
+        if: always() && inputs.sarif-storage-account-name != ''
+        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload SARIF to Azure Storage
+        if: always() && inputs.sarif-storage-account-name != ''
+        uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
+        with:
+          storage-account-name: ${{ inputs.sarif-storage-account-name }}
+          container-name: ${{ inputs.sarif-storage-container-name }}
+          source-path: ${{ steps.rename.outputs.renamed-file }}
+          destination-path: ${{ inputs.sarif-storage-destination-path }}
+          content-type: 'application/sarif+json'
+          overwrite: 'true'
   # ============================================================================
   # Job 3: Trivy Security Scan
   # ============================================================================
@@ -351,7 +389,24 @@ jobs:
           source-file: 'trivy-results.sarif'
           environment: ${{ inputs.environment }}
 
-      # Note: SARIF upload is handled by the scan-trivy composite action
+      - name: Azure OIDC Login
+        if: always() && inputs.sarif-storage-account-name != ''
+        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload SARIF to Azure Storage
+        if: always() && inputs.sarif-storage-account-name != ''
+        uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
+        with:
+          storage-account-name: ${{ inputs.sarif-storage-account-name }}
+          container-name: ${{ inputs.sarif-storage-container-name }}
+          source-path: ${{ steps.rename.outputs.renamed-file }}
+          destination-path: ${{ inputs.sarif-storage-destination-path }}
+          content-type: 'application/sarif+json'
+          overwrite: 'true'
 
   # ============================================================================
   # Job 4: Aggregate Security Results
