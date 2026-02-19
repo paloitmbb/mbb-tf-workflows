@@ -325,24 +325,24 @@ jobs:
           source-file: 'tfsec-results.sarif'
           environment: ${{ inputs.environment }}
 
-      - name: Azure OIDC Login
-        if: always() && inputs.sarif-storage-account-name != ''
-        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # - name: Azure OIDC Login
+      #   if: always() && inputs.sarif-storage-account-name != ''
+      #   uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+      #   with:
+      #     client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      #     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      #     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Upload SARIF to Azure Storage
-        if: always() && inputs.sarif-storage-account-name != ''
-        uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
-        with:
-          storage-account-name: ${{ inputs.sarif-storage-account-name }}
-          container-name: ${{ inputs.sarif-storage-container-name }}
-          source-path: ${{ steps.rename.outputs.renamed-file }}
-          destination-path: ${{ inputs.sarif-storage-destination-path }}
-          content-type: 'application/sarif+json'
-          overwrite: 'true'
+      # - name: Upload SARIF to Azure Storage
+      #   if: always() && inputs.sarif-storage-account-name != ''
+      #   uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
+      #   with:
+      #     storage-account-name: ${{ inputs.sarif-storage-account-name }}
+      #     container-name: ${{ inputs.sarif-storage-container-name }}
+      #     source-path: ${{ steps.rename.outputs.renamed-file }}
+      #     destination-path: ${{ inputs.sarif-storage-destination-path }}
+      #     content-type: 'application/sarif+json'
+      #     overwrite: 'true'
   # ============================================================================
   # Job 3: Trivy Security Scan
   # ============================================================================
@@ -391,24 +391,24 @@ jobs:
           source-file: 'trivy-results.sarif'
           environment: ${{ inputs.environment }}
 
-      - name: Azure OIDC Login
-        if: always() && inputs.sarif-storage-account-name != ''
-        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # - name: Azure OIDC Login
+      #   if: always() && inputs.sarif-storage-account-name != ''
+      #   uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+      #   with:
+      #     client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      #     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      #     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Upload SARIF to Azure Storage
-        if: always() && inputs.sarif-storage-account-name != ''
-        uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
-        with:
-          storage-account-name: ${{ inputs.sarif-storage-account-name }}
-          container-name: ${{ inputs.sarif-storage-container-name }}
-          source-path: ${{ steps.rename.outputs.renamed-file }}
-          destination-path: ${{ inputs.sarif-storage-destination-path }}
-          content-type: 'application/sarif+json'
-          overwrite: 'true'
+      # - name: Upload SARIF to Azure Storage
+      #   if: always() && inputs.sarif-storage-account-name != ''
+      #   uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
+      #   with:
+      #     storage-account-name: ${{ inputs.sarif-storage-account-name }}
+      #     container-name: ${{ inputs.sarif-storage-container-name }}
+      #     source-path: ${{ steps.rename.outputs.renamed-file }}
+      #     destination-path: ${{ inputs.sarif-storage-destination-path }}
+      #     content-type: 'application/sarif+json'
+      #     overwrite: 'true'
 
   # ============================================================================
   # Job 4: Aggregate Security Results
