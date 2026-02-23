@@ -18,7 +18,7 @@ on:
       - 'modules/**'
       - '**.tf'
       - '**.tfvars'
-  
+
   # Manual trigger for testing
   workflow_dispatch:
     inputs:
@@ -49,13 +49,13 @@ jobs:
     outputs:
       environment: ${{ steps.set-env.outputs.environment }}
       working-directory: ${{ steps.set-env.outputs.working-directory }}
-    
+
     steps:
       - name: Determine Environment from Target Branch
         id: set-env
         run: |
           TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
-          
+
           if [[ "$TARGET_BRANCH" == "main" ]]; then
             ENV="prod"
           elif [[ "$TARGET_BRANCH" == "develop" ]]; then
@@ -63,10 +63,10 @@ jobs:
           else
             ENV="dev"
           fi
-          
+
           echo "environment=${ENV}" >> $GITHUB_OUTPUT
           echo "working-directory=./env/${ENV}" >> $GITHUB_OUTPUT
-          
+
           echo "## 📍 Target Environment" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${TARGET_BRANCH} → **Environment:** ${ENV}" >> $GITHUB_STEP_SUMMARY
 
@@ -83,33 +83,33 @@ jobs:
       working-directory: ${{ needs.prepare.outputs.working-directory }}
       environment: ${{ needs.prepare.outputs.environment }}
       terraform-var-file: 'terraform.tfvars'
-      
+
       # Code Quality
       enable-tflint: true
       tflint-version: 'v0.60.0'
-      
+
       # Security Scanners
       enable-tfsec: true
       enable-trivy: true
-      
+
       # Use manual severity input if provided, otherwise use HIGH
       tfsec-severity: ${{ github.event.inputs.severity || 'HIGH' }}
       trivy-severity: ${{ github.event.inputs.severity || 'HIGH' }}
-      
+
       # Continue-on-error Control (allow all scans for reporting)
       tfsec-continue-on-error: true        # Run all scans
       trivy-continue-on-error: true        # All findings captured
       aggregate-continue-on-error: true    # Let security-gate handle failure
-      
+
       # Execution
       runner-os: 'ubuntu-latest'
-    
+
     secrets:
       # Azure OIDC Authentication (required for plan preview with backend access)
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      
+
       # Optional: GitHub token for private module access
       # GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
@@ -121,7 +121,7 @@ jobs:
     needs: [prepare, security-and-plan]
     runs-on: ubuntu-latest
     if: always()
-    
+
     steps:
       - name: Check Security Results
         run: |
@@ -134,7 +134,7 @@ jobs:
           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| tfsec | ${{ needs.security-and-plan.outputs.tfsec-status }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Trivy | ${{ needs.security-and-plan.outputs.trivy-status }} |" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ "${{ needs.security-and-plan.outputs.security-all-passed }}" != "true" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ **Security checks failed - PR cannot be merged**" >> $GITHUB_STEP_SUMMARY

@@ -1,4 +1,4 @@
-name: Reusable Terraform Security Scans
+name: Terraform Security - Validation & Scans
 
 # ============================================================================
 # Terraform Validation + Security Workflow
@@ -12,7 +12,7 @@ name: Reusable Terraform Security Scans
 # - Plan preview with Azure OIDC authentication for PR feedback
 # - Time savings: ~3-5 minutes (parallel vs sequential)
 # - Conditional scanner enablement via inputs
-# - Uses common-setup and security-aggregate composite actions
+# - Uses common-setup and security-aggregate-results composite actions
 # ============================================================================
 
 on:
@@ -232,7 +232,7 @@ jobs:
   # Job 1: Terraform Validation
   # ============================================================================
   validate:
-    name: Validate Terraform (${{ inputs.environment }})
+    name: ✅ Validate - Syntax & Format (${{ inputs.environment }})
     runs-on: ${{ inputs.validate-runner-os || inputs.runner-os }}
     timeout-minutes: 15
     outputs:
@@ -256,17 +256,17 @@ jobs:
 
       - name: Terraform Validate
         id: validate
-        uses: paloitmbb/mbb-tf-actions/actions/terraform-validate@main
+        uses: paloitmbb/mbb-tf-actions/actions/terraform-validate-syntax@main
         with:
           working-directory: ${{ inputs.working-directory }}
           enable-tflint: ${{ inputs.enable-tflint }}
           tflint-version: ${{ inputs.tflint-version }}
 
   # ============================================================================
-  # Job 2: tfsec Security Scan
+  # Job 2: 🔒 Security Scan - tfsec
   # ============================================================================
   tfsec-scan:
-    name: Security Scan - tfsec
+    name: 🔒 Security Scan - tfsec
     runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
     timeout-minutes: 15
     if: inputs.enable-tfsec == true
@@ -291,9 +291,9 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           enable-backend: 'false'
 
-      - name: tfsec Security Scan
+      - name: Security - Scan tfsec
         id: scan
-        uses: paloitmbb/mbb-tf-actions/actions/scan-tfsec@main
+        uses: paloitmbb/mbb-tf-actions/actions/security-scan-tfsec@main
         with:
           enabled: ${{ inputs.enable-tfsec }}
           working-directory: ${{ inputs.working-directory }}
@@ -305,15 +305,15 @@ jobs:
       - name: Rename SARIF File
         id: rename
         if: always()
-        uses: paloitmbb/mbb-tf-actions/actions/sarif-naming@main
+        uses: paloitmbb/mbb-tf-actions/actions/security-generate-sarifname@main
         with:
           scanner-name: 'tfsec'
           source-file: 'tfsec-results.sarif'
           environment: ${{ inputs.environment }}
 
-      - name: Azure OIDC Login
+      - name: Azure - Login OIDC
         if: always() && inputs.sarif-storage-account-name != ''
-        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+        uses: paloitmbb/mbb-tf-actions/actions/azure-login-oidc@main
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -321,7 +321,7 @@ jobs:
 
       - name: Upload SARIF to Azure Storage
         if: always() && inputs.sarif-storage-account-name != ''
-        uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
+        uses: paloitmbb/mbb-tf-actions/actions/azure-upload-artifact@main
         with:
           storage-account-name: ${{ inputs.sarif-storage-account-name }}
           container-name: ${{ inputs.sarif-storage-container-name }}
@@ -331,10 +331,10 @@ jobs:
           overwrite: 'true'
 
   # ============================================================================
-  # Job 3: Trivy Security Scan
+  # Job 3: 🔒 Security Scan - Trivy
   # ============================================================================
   trivy-scan:
-    name: Security Scan - trivy
+    name: 🔒 Security Scan - Trivy
     runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
     timeout-minutes: 15
     if: inputs.enable-trivy == true
@@ -361,7 +361,7 @@ jobs:
 
       - name: Trivy Security Scan
         id: scan
-        uses: paloitmbb/mbb-tf-actions/actions/scan-trivy@main
+        uses: paloitmbb/mbb-tf-actions/actions/security-scan-trivy@main
         with:
           enabled: ${{ inputs.enable-trivy }}
           working-directory: ${{ inputs.working-directory }}
@@ -372,15 +372,15 @@ jobs:
       - name: Rename SARIF File
         id: rename
         if: always()
-        uses: paloitmbb/mbb-tf-actions/actions/sarif-naming@main
+        uses: paloitmbb/mbb-tf-actions/actions/security-generate-sarifname@main
         with:
           scanner-name: 'trivy'
           source-file: 'trivy-results.sarif'
           environment: ${{ inputs.environment }}
 
-      - name: Azure OIDC Login
+      - name: Azure - Login OIDC
         if: always() && inputs.sarif-storage-account-name != ''
-        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+        uses: paloitmbb/mbb-tf-actions/actions/azure-login-oidc@main
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -388,7 +388,7 @@ jobs:
 
       - name: Upload SARIF to Azure Storage
         if: always() && inputs.sarif-storage-account-name != ''
-        uses: paloitmbb/mbb-tf-actions/actions/azure-blobstorage-upload@main
+        uses: paloitmbb/mbb-tf-actions/actions/azure-upload-artifact@main
         with:
           storage-account-name: ${{ inputs.sarif-storage-account-name }}
           container-name: ${{ inputs.sarif-storage-container-name }}
@@ -398,10 +398,10 @@ jobs:
           overwrite: 'true'
 
   # ============================================================================
-  # Job 4: Aggregate Security Results
+  # Job 4: 📊 Security - Aggregate Results
   # ============================================================================
   aggregate-security:
-    name: Aggregate Security Results
+    name: 📊 Security - Aggregate Results
     needs: [tfsec-scan, trivy-scan]
     runs-on: ${{ inputs.security-runner-os || inputs.runner-os }}
     timeout-minutes: 5
@@ -415,7 +415,7 @@ jobs:
     steps:
       - name: Aggregate Security Results
         id: aggregate
-        uses: paloitmbb/mbb-tf-actions/actions/security-aggregate@main
+        uses: paloitmbb/mbb-tf-actions/actions/security-aggregate-results@main
         with:
           tfsec-enabled: ${{ inputs.enable-tfsec }}
           tfsec-outcome: ${{ needs.tfsec-scan.outputs.outcome || 'skipped' }}
@@ -459,8 +459,8 @@ jobs:
         with:
           terraform-version: ${{ inputs.terraform-version }}
 
-      - name: Azure OIDC Login
-        uses: paloitmbb/mbb-tf-actions/actions/azure-oidc-login@main
+      - name: Azure - Login OIDC
+        uses: paloitmbb/mbb-tf-actions/actions/azure-login-oidc@main
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -504,7 +504,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: PR Comment with Security & Plan Results
-        uses: paloitmbb/mbb-tf-actions/actions/pr-comment-plan@main
+        uses: paloitmbb/mbb-tf-actions/actions/github-comment-plan@main
         with:
           working-directory: ${{ inputs.working-directory }}
           environment: ${{ inputs.environment }}
@@ -523,4 +523,3 @@ jobs:
           trivy-status: ${{ needs.aggregate-security.outputs.trivy-status }}
           trivy-severity: ${{ inputs.trivy-severity }}
           security-passed: ${{ needs.aggregate-security.outputs.all-passed }}
-

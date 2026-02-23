@@ -18,7 +18,7 @@ on:
       - 'modules/**'
       - '**.tf'
       - '**.tfvars'
-  
+
   workflow_dispatch:
     inputs:
       environment:
@@ -53,7 +53,7 @@ jobs:
     outputs:
       environment: ${{ steps.detect.outputs.environment }}
       working-directory: ${{ steps.detect.outputs.working-directory }}
-    
+
     steps:
       - uses: paloitmbb/mbb-tf-actions/actions/determine-environment@main
         id: detect
@@ -75,34 +75,34 @@ jobs:
       working-directory: ${{ needs.prepare.outputs.working-directory }}
       environment: ${{ needs.prepare.outputs.environment }}
       terraform-var-file: 'terraform.tfvars'
-      
+
       # Code Quality
       enable-tflint: true
       tflint-version: 'v0.60.0'
-      
+
       # Security Scanners (tfsec + Trivy in parallel)
       enable-tfsec: true
       enable-trivy: true
-      
+
       # Security Severity Thresholds (HIGH by default)
       tfsec-severity: 'HIGH'
       trivy-severity: 'HIGH'
-      
+
       # Continue-on-error Control
       tfsec-continue-on-error: true        # Allow all scans to run
       trivy-continue-on-error: true        # Full security posture
       aggregate-continue-on-error: false   # Fail fast if aggregate fails
-      
+
       # Execution Configuration
       runner-os: 'ubuntu-latest'
       timeout-minutes: 60
-    
+
     secrets:
       # Azure OIDC Authentication (required for plan generation)
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      
+
       # Optional: GitHub token for private module access
       # GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
@@ -114,7 +114,7 @@ jobs:
     needs: [prepare, terraform-ci]
     runs-on: ubuntu-latest
     if: always() && needs.terraform-ci.outputs.plan-exitcode == '2'
-    
+
     steps:
       - name: Notify Team
         run: |

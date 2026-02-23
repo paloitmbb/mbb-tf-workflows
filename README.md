@@ -170,6 +170,3 @@ with:
 - [example/README.md](example/README.md) — sample consumer repo wiring plus env detection tips.
 - [paloitmbb/mbb-tf-actions docs](https://github.com/paloitmbb/mbb-tf-actions/tree/main/docs) — action-level inputs/outputs.
 - [mbb-tf-caller1/docs](https://github.com/paloitmbb/mbb-tf-caller1/tree/main/docs) — reference implementation using these workflows.
-
-
-

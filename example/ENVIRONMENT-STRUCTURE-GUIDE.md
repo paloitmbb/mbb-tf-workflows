@@ -195,14 +195,14 @@ jobs:
       working-directory: './env/dev'
       environment: 'dev'
       terraform-var-file: 'terraform.tfvars'
-  
+
   stage:
     uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     with:
       working-directory: './env/stage'
       environment: 'stage'
       terraform-var-file: 'terraform.tfvars'
-  
+
   prod:
     uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci.yml@main
     with:
