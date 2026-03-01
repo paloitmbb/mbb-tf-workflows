@@ -2,36 +2,27 @@
 
 Reusable GitHub Actions workflows for Terraform that combine zero-trust authentication, parallel security scanning, and repeatable plan handling for any infrastructure repository.
 
-> [!TIP]
-> These workflows orchestrate the composite actions published in [paloitmbb/mbb-tf-actions](https://github.com/paloitmbb/mbb-tf-actions). Keep both repositories in sync to ensure inputs and outputs stay aligned.
-
 ## Highlights
 
-- **Security-first pipeline** — tfsec + Trivy run in parallel, upload SARIF, and roll into a single gate.
-- **Zero static creds** — Azure OIDC for Terraform state, GitHub HTTP backend for GitHub provider use cases.
-- **Artifact provenance** — Optional plan attestation, hashing, and uploads for downstream promotion.
-- **DRY by design** — Consumer repos call one workflow and inherit validation, scanning, and plan UX.
-
-```
-Caller Repo Workflow
-    ↓ workflow_call
-mbb-tf-workflows (terraform-ci / terraform-security / terraform-gh-ci)
-    ↓ uses
-paloitmbb/mbb-tf-actions composite steps
-```
+- 🛡️ **Security-first pipeline** — `tfsec` + `Trivy` run in parallel, upload SARIF, and roll into a single gate.
+- 🔐 **Zero static creds** — Azure OIDC for Terraform state (including GitHub provider use cases).
+- 📦 **Artifact provenance** — Optional plan attestation, hashing, and uploads for downstream promotion.
+- ♻️ **DRY by design** — Consumer repos call one workflow and inherit validation, scanning, and plan UX.
 
 ## Workflow Catalog
 
 | Workflow | Backend | Typical Trigger | Primary Use |
-| --- | --- | --- | --- |
-| `.github/workflows/terraform-ci.yml` | Azure (`azurerm`) | Push / nightly | Full CI: validate → scan → plan, upload artifacts, attest plans, PR comments |
-| `.github/workflows/terraform-security.yml` | Azure (`azurerm`) | Pull requests | Reviewer-focused: validation, security scans, real plan preview (no artifacts) |
-| `.github/workflows/terraform-gh-ci.yml` | GitHub HTTP | Push / PR for GitHub provider repos | Same pattern but optimized for mbb-iac (HTTP backend, no Azure secrets) |
+| :--- | :--- | :--- | :--- |
+| [**terraform-ci**](.github/workflows/terraform-ci.yml) | Azure (`azurerm`) | Push / nightly | Full CI: validate → scan → plan, upload artifacts, attest plans, PR comments |
+| [**terraform-security**](.github/workflows/terraform-security.yml) | Azure (`azurerm`) | Pull requests | Reviewer-focused: validation, security scans, real plan preview (no artifacts) |
+| [**terraform-ci-github**](.github/workflows/terraform-ci-github.yml) | Azure (`azurerm`) | Push / PR | Optimized for GitHub organization Terraform (mbb-iac), using Azure storage backend (requires Azure secrets) |
 
 > [!NOTE]
-> The `terraform-gh-ci.yml` workflow swaps Azure OIDC for GitHub HTTP backend auth so GitHub organization Terraform (mbb-iac) can reuse the same CI pattern without cloud credentials.
+> These workflows orchestrate the composite actions published in [paloitmbb/mbb-tf-actions](https://github.com/paloitmbb/mbb-tf-actions). Keep both repositories in sync to ensure inputs and outputs stay aligned.
 
 ## Quick Start (terraform-ci)
+
+To set up a full CI pipeline that validates, scans, and plans your Terraform configuration:
 
 ```yaml
 name: Terraform CI
@@ -59,53 +50,36 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 ```
 
-### Inputs & Secrets (common)
+## Inputs & Configuration
 
-| Key | Required | Notes |
-| --- | --- | --- |
-| `terraform-version` | No | Defaults to `1.7.0`. Keep in sync with caller repos. |
+Most workflows share these common inputs:
+
+| Key | Required | Description |
+| :--- | :---: | :--- |
+| `terraform-version` | No | Terraform version to use (default: `1.7.0`). |
 | `working-directory` | No | Root of Terraform configuration. |
 | `environment` | **Yes** | Drives backend selection, naming, and PR messaging. |
-| `terraform-var-file` | No | Relative to `working-directory`; dramatically improves scan accuracy. |
-| `enable-tflint`, `enable-tfsec`, `enable-trivy` | No | Toggle scanners individually. |
-| `tfsec-severity`, `trivy-severity` | No | Default `HIGH`; lower for dev, raise for prod. |
-| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | Secrets | Required for Azure-backed workflows. Not used by `terraform-gh-ci`. |
-| `ORG_GITHUB_TOKEN` | Secret | Needed only when using `terraform-gh-ci.yml` against the GitHub HTTP backend. |
+| `terraform-var-file` | No | Path relative to `working-directory`. Passing this dramatically improves scan accuracy. |
+| `enable-tflint`, `enable-tfsec`, `enable-trivy` | No | Toggle individual scanners. |
+| `tfsec-severity`, `trivy-severity` | No | Minimum severity to report (default `HIGH`). |
 
-### Required Permissions
+### Secrets
 
-- `terraform-ci.yml`: `contents`, `security-events`, `id-token`, `pull-requests`, `actions`, `attestations`
-- `terraform-security.yml`: same minus `pull-requests` and `attestations`
-- `terraform-gh-ci.yml`: `contents`, `security-events`, `pull-requests`, `actions` (no Azure OIDC)
-
-## Security Architecture
-
-### OIDC Everywhere
-- Azure workflows rely on Workload Identity Federation (see [docs/AZURE-OIDC-QUICKSTART.md](docs/AZURE-OIDC-QUICKSTART.md)).
-- GitHub-provider workflow uses the HTTP backend with `TF_HTTP_USERNAME/password` exported by mbb-iac scripts.
-
-### Parallel Scanners
-
-| Stage | Tool | Output |
-| --- | --- | --- |
-| Validation | `terraform fmt`, `terraform validate`, `tflint` | Logs + status outputs |
-| Security | tfsec | `tfsec-results.sarif` (category `tfsec-{env}`) |
-| Security | Trivy | `trivy-results.sarif` (category `trivy-{env}`) |
-| Aggregate | security-aggregate | `all-passed`, individual statuses |
-
-- Scanners run with `continue-on-error: true`; the aggregate job determines failure.
-- Passing `terraform-var-file` enables ~95% rule coverage because conditional resources resolve properly.
-
-### Plan Integrity (terraform-ci)
-
-1. `terraform-plan` writes `tfplan` and summary.
-2. `tfplan-metadata` hashes the file and emits `plan-metadata.json`.
-3. `actions/attest-build-provenance` signs the plan when `generate-attestation: true`.
-4. `pr-comment-plan` posts the plan, scanner statuses, and exit codes to the PR.
+| Secret | Required by | Description |
+| :--- | :--- | :--- |
+| `AZURE_CLIENT_ID` | `terraform-ci`, `terraform-security` | The Client ID of the Azure AD application. |
+| `AZURE_TENANT_ID` | `terraform-ci`, `terraform-security` | The Tenant ID of the Azure AD tenant. |
+| `AZURE_SUBSCRIPTION_ID` | `terraform-ci`, `terraform-security` | The Subscription ID where resources are deployed. |
+| `ARM_CLIENT_ID` | `terraform-ci-github` | The Client ID of the Azure AD application (for OIDC). |
+| `ARM_TENANT_ID` | `terraform-ci-github` | The Tenant ID of the Azure AD tenant (for OIDC). |
+| `ARM_SUBSCRIPTION_ID` | `terraform-ci-github` | The Subscription ID where resources are deployed (for OIDC). |
+| `ORG_GITHUB_TOKEN` | `terraform-ci-github` | Token for GitHub provider authentication. |
 
 ## Usage Recipes
 
 ### PR Validation (terraform-security)
+
+Ideal for faster feedback loops on Pull Requests without generating artifacts.
 
 ```yaml
 name: PR Checks
@@ -126,47 +100,65 @@ jobs:
       terraform-var-file: terraform.tfvars
 ```
 
-### GitHub Org Infra (terraform-gh-ci)
+### GitHub Org Infra (terraform-ci-github)
+
+For repositories managing GitHub resources using the GitHub provider and Azure storage backend.
 
 ```yaml
 jobs:
   gh-infra:
-    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-gh-ci.yml@v1
+    uses: paloitmbb/mbb-tf-workflows/.github/workflows/terraform-ci-github.yml@v1
     with:
       environment: dev
       working-directory: ./mbb-iac
     secrets:
       ORG_GITHUB_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 ```
 
-### Severity by Branch
+### Dynamic Environments
+
+Configure environment-specific inputs based on the branch name.
 
 ```yaml
 with:
   environment: ${{ startsWith(github.ref, 'refs/heads/main') && 'prod' || 'dev' }}
   tfsec-severity: ${{ startsWith(github.ref, 'refs/heads/main') && 'HIGH' || 'MEDIUM' }}
-  trivy-severity: ${{ startsWith(github.ref, 'refs/heads/main') && 'HIGH' || 'MEDIUM' }}
 ```
 
-## Best Practices
+## Security Architecture
 
-1. **Pin versions** — reference tagged releases (`@v1.x`) in consumer repos to avoid breaking changes.
-2. **Pass tfvars** — use environment-specific var files for accurate scans and plans.
-3. **Scope triggers** — limit `on.push.paths` to Terraform directories so docs-only changes skip CI.
-4. **Mirror permissions** — grant only what each workflow needs; remove unused scopes on PR-only runs.
+### OIDC Authentication
+Azure workflows leverage Workload Identity Federation, eliminating the need for long-lived secrets.
+👉 [**Azure OIDC Setup Guide**](docs/AZURE-OIDC-QUICKSTART.md)
+
+### Parallel Scanning
+Security is enforced by running multiple scanners concurrently. The pipeline aggregates results and fails only if critical issues are found.
+
+1. **Validation**: `terraform fmt`, `terraform validate`, `tflint`
+2. **Security**: `tfsec`, `Trivy` (SARIF output)
+3. **Aggregation**: Pass/fail determination based on severity thresholds.
+
+### Plan Integrity
+For the `terraform-ci` workflow:
+1. `terraform-plan` generates the plan and summary.
+2. `tfplan-metadata` hashes the plan for verification.
+3. `actions/attest-build-provenance` signs the plan if enabled.
+4. Results are posted to the Pull Request for review.
 
 ## Troubleshooting
 
 | Symptom | Likely Cause | Fix |
-| --- | --- | --- |
-| `AADSTS700016` when initializing backend | Azure AD app or federated credential missing | Re-run steps from [AZURE-OIDC-QUICKSTART](docs/AZURE-OIDC-QUICKSTART.md) and confirm `az ad app federated-credential list --id $AZURE_CLIENT_ID` shows entries. |
-| SARIF upload fails with “resource not accessible” | Missing `actions: read` permission | Add `actions: read` to workflow permissions block. |
-| `terraform-var-file` not found | Path not relative to `working-directory` | Place the file inside the environment folder or adjust the input path. |
-| Plan step stuck waiting for backend | Backend not initialized (skipped `terraform-init` in caller) | Ensure `terraform-setup` → `terraform-init` run in the same job before plan. |
+| :--- | :--- | :--- |
+| `AADSTS700016` error | Missing federated credential | Check `az ad app federated-credential list` and review [OIDC guide](docs/AZURE-OIDC-QUICKSTART.md). |
+| SARIF upload failure | Missing permissions | Ensure `actions: read` and `security-events: write` are in your workflow permissions. |
+| `terraform-var-file` not found | Incorrect path | Verify the path is relative to `working-directory`. |
+| Plan step hangs | Backend not initialized | Confirm `terraform-setup` and `terraform-init` run before the plan step. |
 
-## Documentation & References
+## Documentation
 
-- [docs/AZURE-OIDC-QUICKSTART.md](docs/AZURE-OIDC-QUICKSTART.md) — detailed Azure identity setup.
-- [example/README.md](example/README.md) — sample consumer repo wiring plus env detection tips.
-- [paloitmbb/mbb-tf-actions docs](https://github.com/paloitmbb/mbb-tf-actions/tree/main/docs) — action-level inputs/outputs.
-- [mbb-tf-caller1/docs](https://github.com/paloitmbb/mbb-tf-caller1/tree/main/docs) — reference implementation using these workflows.
+- [**Azure OIDC Quickstart**](docs/AZURE-OIDC-QUICKSTART.md)
+- [**Example Consumer Repo**](example/README.md)
+- [**Action Reference**](https://github.com/paloitmbb/mbb-tf-actions/tree/main/docs)
