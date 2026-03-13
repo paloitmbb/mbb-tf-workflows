@@ -252,6 +252,11 @@ jobs:
         with:
           terraform-version: ${{ inputs.terraform-version }}
 
+      - name: Validate GitHub.com Connectivity
+        env:
+          GH_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
+        run: gh auth status
+
       - name: Terraform Init (Backend Disabled)
         uses: paloitmbb/mbb-tf-actions/actions/terraform-init@main
         with:
